@@ -1,0 +1,57 @@
+{
+  "name": "image-labeler-react",
+  "version": "1.0.3",
+  "description": "image labeler",
+  "main": "dist/Annotator.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc && cp -r ./src/res ./dist/res",
+    "prepare": "npm run build && echo 'Finish building'"
+  },
+  "keywords": [
+    "image labeler",
+    "react component"
+  ],
+  "peerDependencies": {
+    "@types/jest": "24.0.14",
+    "@types/node": "12.0.8",
+    "@types/react": "16.8.20",
+    "@types/react-dom": "16.8.4",
+    "antd": "^3.19.3",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6",
+    "typescript": "3.5.2"
+  },
+  "types": "dist/Annotator.d.ts",
+  "devDependencies": {
+    "@babel/cli": "^7.4.4",
+    "@babel/core": "^7.4.5",
+    "@babel/plugin-proposal-class-properties": "^7.4.4",
+    "@babel/plugin-proposal-object-rest-spread": "^7.4.4",
+    "@babel/plugin-transform-typescript": "^7.4.5",
+    "@babel/preset-env": "^7.4.5",
+    "@babel/preset-react": "^7.0.0",
+    "@babel/preset-typescript": "^7.3.3",
+    "@types/react": "^16.8.20",
+    "antd": "^3.19.3",
+    "awesome-typescript-loader": "^5.2.1",
+    "babel-loader": "^8.0.6",
+    "css-loader": "^3.0.0",
+    "html-webpack-plugin": "^3.2.0",
+    "import-local": "^2.0.0",
+    "optimize-css-assets-webpack-plugin": "^5.0.1",
+    "react": "^16.8.6",
+    "react-dom": "^16.8.6",
+    "style-loader": "^0.23.1",
+    "ts-loader": "^6.0.2",
+    "typescript": "^3.5.2",
+    "webpack": "^4.34.0",
+    "webpack-cli": "^4.0.0-alpha-4"
+  },
+  "dependencies": {
+    "babel-plugin-import": "^1.12.0",
+    "babel-preset-env": "^1.7.0"
+  },
+  "author": "Rem",
+  "license": "MIT"
+}
