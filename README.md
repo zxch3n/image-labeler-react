@@ -20,8 +20,10 @@ const App: React.FC = () => {
   return (
     <div className="App">
       <Annotator 
-        height={600} width={600} 
-        imageUrl={""} asyncUpload={async (labeledData)=>{
+        height={600} 
+        width={600} 
+        imageUrl={""} 
+        asyncUpload={async (labeledData)=>{
             // upload labeled data
         }} 
         types={['A', 'B', 'Cylinder']}
@@ -33,7 +35,25 @@ const App: React.FC = () => {
 export default App;
 ```
 
+`asyncUpload` will be invoked when click Upload button or press `Enter`. 
 
+The structure of param `labeledData` is
 
+```js
+{
+  image: this.image.src,
+  height: this.image.naturalHeight,
+  width: this.image.naturalWidth,
+  flaws: [
+    {
+      x: 100,
+      y: 100,
+      w: 10,
+      h: 10,
+      annotation: 'Cylinder'
+    }
+  ]
+}
+```
 
 

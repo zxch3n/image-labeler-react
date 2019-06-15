@@ -70,6 +70,11 @@ class Box {
         return false;
     }
 
+    getData() {
+        const {x, y, w, h, annotation} = this;
+        return { x, y, w, h, annotation };
+    }
+
     // TODO move draw here
 
     // TODO add special visual effect for lock element
@@ -700,6 +705,9 @@ export class Annotator extends React.Component<Props, State>{
                 <React.Fragment>
                     <Button style={{ margin: 8 }} onClick={() => this.setState({ isAnnotating: !this.state.isAnnotating })} >
                         To {this.state.isAnnotating ? 'Move' : 'Annotate'}
+                    </Button>
+                    <Button onClick={this.onUpload}>
+                        Upload
                     </Button>
                 </React.Fragment>
             ) : null
