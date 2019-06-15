@@ -24,6 +24,10 @@ var Box = /** @class */ (function () {
         }
         return false;
     };
+    Box.prototype.getData = function () {
+        var _a = this, x = _a.x, y = _a.y, w = _a.w, h = _a.h, annotation = _a.annotation;
+        return { x: x, y: y, w: w, h: h, annotation: annotation };
+    };
     return Box;
 }());
 var Annotator = /** @class */ (function (_super) {
@@ -557,7 +561,8 @@ var Annotator = /** @class */ (function (_super) {
         var buttons = (showButton ? (React.createElement(React.Fragment, null,
             React.createElement(Button, { style: { margin: 8 }, onClick: function () { return _this.setState({ isAnnotating: !_this.state.isAnnotating }); } },
                 "To ",
-                this.state.isAnnotating ? 'Move' : 'Annotate'))) : null);
+                this.state.isAnnotating ? 'Move' : 'Annotate'),
+            React.createElement(Button, { onClick: this.onUpload }, "Upload"))) : null);
         return (React.createElement("div", { style: shownStyle, className: className },
             buttons,
             React.createElement("div", { style: {

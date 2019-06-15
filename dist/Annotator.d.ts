@@ -37,6 +37,13 @@ declare class Box {
     annotation: string;
     constructor(x: number, y: number, w: number, h: number);
     insideBox(x: number, y: number): boolean;
+    getData(): {
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+        annotation: string;
+    };
 }
 export declare class Annotator extends React.Component<Props, State> {
     private readonly imageCanvas;
