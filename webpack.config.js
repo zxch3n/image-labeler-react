@@ -4,10 +4,11 @@ const webpack = require('webpack');
 
 module.exports = {
     context: __dirname,
-    entry: ["@babel/polyfill", "./src/Demo.tsx", "./src/demo.html"],
+    entry: ["@babel/polyfill", "./src/Demo.tsx", "./src/index.html"],
     output: {
         filename: "app.js",
         path: path.join(__dirname, "/demoDist"),
+        publicPath: '/'
     },
     resolve: {
         extensions: ['.ts', '.tsx', '.js', '.jsx']
@@ -51,6 +52,7 @@ module.exports = {
     ],
     devServer: {
         hot: true,
-        contentBase: './demoDist'
+        contentBase: './demoDist',
+        historyApiFallback: true
     }
 }

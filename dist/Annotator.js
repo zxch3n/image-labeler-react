@@ -217,16 +217,17 @@ var Annotator = /** @class */ (function (_super) {
                 }
                 _this.lastZoomScale = zoomScale;
             }
-            return zoom;
+            return zoom * 0.2;
         };
         _this.doZoom = function (zoom) {
             if (!zoom)
                 return;
+            zoom *= 4;
             if (_this.canvas == null) {
                 throw "Canvas does not exist!";
             }
             var currentScale = _this.scale.x;
-            var newScale = _this.scale.x + zoom / 100;
+            var newScale = _this.scale.x * (100 + zoom) / 100;
             var deltaScale = newScale - currentScale;
             var currentWidth = (_this.image.width * _this.scale.x);
             var currentHeight = (_this.image.height * _this.scale.y);
