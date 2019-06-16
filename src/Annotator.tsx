@@ -11,13 +11,13 @@ const { Option } = Select;
 
 interface Props {
     imageUrl: string,
-    height: number,
-    width: number,
-    asyncUpload: (data: any) => Promise<any>,
-    types: Array<string>,
-    defaultType?: string | undefined,
-    name?: string | null | undefined,
-    showButton?: boolean,
+    height: number, // height of the labeling window
+    width: number, // width of the labeling window
+    asyncUpload: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
+    types: Array<string>, // annotation types
+    defaultType?: string, // default type, can be empty
+    defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
+    showButton?: boolean, // showing button or not, default true
     className?: string,
     style?: any
 }
@@ -38,6 +38,14 @@ interface State {
     uploaded: boolean,
     x: number,
     y: number
+}
+
+interface BoundingBox {
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    annotation: string,
 }
 
 
@@ -72,7 +80,13 @@ class Box {
 
     getData() {
         const {x, y, w, h, annotation} = this;
-        return { x, y, w, h, annotation };
+        return { x, y, w, h, annotation } as BoundingBox;
+    }
+
+    static fromBoundingBox(data: BoundingBox){
+        const box = new Box(data.x, data.y, data.w, data.h);
+        box.annotation = data.annotation;
+        return box;
     }
 
     // TODO move draw here
@@ -129,6 +143,11 @@ export class Annotator extends React.Component<Props, State>{
     componentWillReceiveProps(nextProps: Readonly<Props>, nextContext: any): void {
         if (nextProps.imageUrl !== this.props.imageUrl) {
             this.initCanvas(nextProps.imageUrl);
+            if (nextProps.defaultBoxes){
+                this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox) => {
+                    return Box.fromBoundingBox(bbox);
+                });
+            }
         }
     }
 
@@ -658,7 +677,7 @@ export class Annotator extends React.Component<Props, State>{
             image: this.image.src,
             height: this.image.naturalHeight,
             width: this.image.naturalWidth,
-            flaws: this.boxes,
+            boxes: this.boxes.map(box => box.getData()),
         };
 
         return data;

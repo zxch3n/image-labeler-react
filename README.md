@@ -35,7 +35,26 @@ const App: React.FC = () => {
 export default App;
 ```
 
-`asyncUpload` will be invoked when click Upload button or press `Enter`. 
+## Props
+
+```javascript
+interface Props {
+    imageUrl: string,
+    height: number, // height of the labeling window
+    width: number, // width of the labeling window
+    asyncUpload: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
+    types: Array<string>, // annotation types
+    defaultType?: string, // default type, can be empty
+    defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
+    showButton?: boolean, // showing button or not, default true
+    className?: string,
+    style?: any
+}
+```
+
+## `asyncUpload`
+
+`asyncUpload` will be invoked when clicking Upload button or press `Enter`. 
 
 The structure of param `labeledData` is
 
@@ -44,7 +63,7 @@ The structure of param `labeledData` is
   image: this.image.src,
   height: this.image.naturalHeight,
   width: this.image.naturalWidth,
-  flaws: [
+  boxes: [
     {
       x: 100,
       y: 100,
