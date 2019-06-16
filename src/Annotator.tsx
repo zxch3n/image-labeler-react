@@ -430,17 +430,18 @@ export class Annotator extends React.Component<Props, State>{
             this.lastZoomScale = zoomScale;
         }
 
-        return zoom;
+        return zoom * 0.2;
     };
 
     doZoom = (zoom: number) => {
         if (!zoom) return;
+        zoom *= 4;
         if (this.canvas == null) {
             throw "Canvas does not exist!";
         }
 
         let currentScale = this.scale.x;
-        let newScale = this.scale.x + zoom / 100;
+        let newScale = this.scale.x * (100 + zoom) / 100;
 
         let deltaScale = newScale - currentScale;
         let currentWidth = (this.image.width * this.scale.x);
