@@ -762,7 +762,7 @@ export class Annotator extends React.Component<Props, State>{
                     <Button style={{ margin: 8 }} onClick={() => this.setState({ isAnnotating: !this.state.isAnnotating })} >
                         To {this.state.isAnnotating ? 'Move' : 'Annotate'}
                     </Button>
-                    <Button onClick={this.onUpload}>
+                    <Button onClick={this.onUpload} style={{ marginRight: 8 }}>
                         Upload
                     </Button>
                     {sceneTypeSelect}
