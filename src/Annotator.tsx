@@ -3,7 +3,6 @@ import { Button, Form, Select } from 'antd';
 import 'antd/lib/button/style/css';
 import 'antd/lib/form/style/css';
 import 'antd/lib/select/style/css';
-import example from './res/example.png';
 import bg from './res/bg.png';
 
 const { Option } = Select;
@@ -660,7 +659,7 @@ export class Annotator extends React.Component<Props, State>{
 
     initCanvas = (url: string) => {
         if (url.length === 0) {
-            url = example;
+            url = "https://i.postimg.cc/q7RCmNNV/example.png";
         }
 
         this.isDrawing = false;
@@ -762,7 +761,7 @@ export class Annotator extends React.Component<Props, State>{
                     <Button style={{ margin: 8 }} onClick={() => this.setState({ isAnnotating: !this.state.isAnnotating })} >
                         To {this.state.isAnnotating ? 'Move' : 'Annotate'}
                     </Button>
-                    <Button onClick={this.onUpload} style={{ marginRight: 8 }}>
+                    <Button onClick={this.onUpload} style={{ marginRight: 8 }} disabled={this.props.imageUrl.length === 0}>
                         Upload
                     </Button>
                     {sceneTypeSelect}
