@@ -1,4 +1,4 @@
-# Image Labeler ( Bounding Box Annotation Tool )
+# Image Labeler ( Bounding Box Labeling Tool )
 
 A react component that helps labeling images. Support scaling images by mouse wheel and pinch gesture.
 
