@@ -18,6 +18,7 @@ interface Props {
     defaultType?: string, // default type, can be empty
     defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true
+    sceneTypes?: Array<string>,
     className?: string,
     style?: any
 }
@@ -37,7 +38,8 @@ interface State {
     lock: boolean,
     uploaded: boolean,
     x: number,
-    y: number
+    y: number,
+    sceneType: string
 }
 
 interface BoundingBox {
@@ -128,6 +130,7 @@ export class Annotator extends React.Component<Props, State>{
             uploaded: false,
             lock: false,
             annotation: '',
+            sceneType: '',
             x: 0,
             y: 0
         };
@@ -135,18 +138,26 @@ export class Annotator extends React.Component<Props, State>{
         this.annotatingBox = undefined;
         this.isDrawing = true;
         this.boxes = [];
-        this.initCanvas(props.imageUrl);
         this.bg = new Image();
         this.bg.src = bg;
     }
 
     componentWillReceiveProps(nextProps: Readonly<Props>, nextContext: any): void {
         if (nextProps.imageUrl !== this.props.imageUrl) {
+            // New Image
             this.initCanvas(nextProps.imageUrl);
             if (nextProps.defaultBoxes){
                 this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox) => {
                     return Box.fromBoundingBox(bbox);
                 });
+            }
+        }
+
+        if (nextProps.sceneTypes !== this.props.sceneTypes) {
+            if (nextProps.sceneTypes){
+                this.setState({sceneType: nextProps.sceneTypes[0]});
+            } else {
+                this.setState({sceneType: ''});
             }
         }
     }
@@ -165,6 +176,7 @@ export class Annotator extends React.Component<Props, State>{
 
         this.setEventListeners();
         requestAnimationFrame(this.draw);
+        this.initCanvas(this.props.imageUrl);
     }
 
     setEventListeners = () => {
@@ -524,6 +536,8 @@ export class Annotator extends React.Component<Props, State>{
 
         if (this.props.defaultType) {
             this.annotatingBox.annotation = this.props.defaultType;
+        } else {
+            this.annotatingBox.annotation = this.props.types[0];
         }
     };
 
@@ -670,6 +684,9 @@ export class Annotator extends React.Component<Props, State>{
         this.chosenBox = undefined;
         this.boxes = [];
         this.annotatingBox = undefined;
+        if (this.props.sceneTypes){
+            this.setState({sceneType: this.props.sceneTypes[0]});
+        }
     };
 
     getPostData = () => {
@@ -679,6 +696,10 @@ export class Annotator extends React.Component<Props, State>{
             width: this.image.naturalWidth,
             boxes: this.boxes.map(box => box.getData()),
         };
+
+        if (this.props.sceneTypes) {
+            data['sceneTypes'] = this.state.sceneType;
+        }
 
         return data;
     };
@@ -710,7 +731,7 @@ export class Annotator extends React.Component<Props, State>{
 
 
     render() {
-        const { width, height, showButton = true, className = "", style = {}} = this.props;
+        const { width, height, sceneTypes, showButton = true, className = "", style = {}} = this.props;
         if (!style.hasOwnProperty('position')){
             style['position'] = 'relative';
         }
@@ -720,6 +741,21 @@ export class Annotator extends React.Component<Props, State>{
         let cursor = this.state.hover ? 'pointer' :
             (this.state.isAnnotating ? 'crosshair' : 'grab');
         let isLocked = this.state.lock;
+        let sceneTypeSelect = undefined;
+        if (sceneTypes) {
+            sceneTypeSelect = (
+                <Select
+                    onChange={(sceneType: string) => {
+                        this.setState({ sceneType });
+                    }}
+                    value={this.state.sceneType}
+                >
+                    {sceneTypes.map((type: string) =>
+                        <Option value={type} key={type}>{type}</Option>
+                    )}
+                </Select>
+            );
+        }
         const buttons = (
             showButton ? (
                 <React.Fragment>
@@ -729,6 +765,7 @@ export class Annotator extends React.Component<Props, State>{
                     <Button onClick={this.onUpload}>
                         Upload
                     </Button>
+                    {sceneTypeSelect}
                 </React.Fragment>
             ) : null
         );

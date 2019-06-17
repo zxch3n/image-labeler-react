@@ -13,6 +13,7 @@ ReactDOM.render(
         }} 
         types={['A', 'B', 'Cylinder']}
         defaultType={"Cylinder"}
+        sceneTypes={['1', '2', '3']}
         style={{
           width: 640,
           height: 680,

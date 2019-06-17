@@ -47,6 +47,7 @@ interface Props {
     defaultType?: string, // default type, can be empty
     defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true
+    sceneTypes?: Array<string>, // if provided, the sceneType select box will show up
     className?: string,
     style?: any
 }
@@ -63,6 +64,7 @@ The structure of param `labeledData` is
   image: this.image.src,
   height: this.image.naturalHeight,
   width: this.image.naturalWidth,
+  sceneType?: "undefined when props.sceneTypes is empty",
   boxes: [
     {
       x: 100,
