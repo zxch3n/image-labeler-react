@@ -697,7 +697,7 @@ export class Annotator extends React.Component<Props, State>{
         };
 
         if (this.props.sceneTypes) {
-            data['sceneTypes'] = this.state.sceneType;
+            data['sceneType'] = this.state.sceneType;
         }
 
         return data;
