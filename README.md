@@ -6,7 +6,7 @@ A react component that helps labeling images. Support scaling images by mouse wh
 
 [![labeler.gif](https://i.postimg.cc/L4rMYRxQ/labeler.gif)](https://postimg.cc/F1g6wt50)
 
-# Usage
+## Usage
 
 ```bash
 npm install image-labeler-react
@@ -34,6 +34,17 @@ const App: React.FC = () => {
 
 export default App;
 ```
+
+### Shortkeys
+
+|Shortcut Key| Action|
+|:-----------|:------|
+|   Enter    |  Upload  |
+|   Tab    |  Switch Mode (Annotate|Move)  |
+|   +    |  Zoom In  |
+|   -    |  Zoom Out  |
+
+
 
 ## Props
 
