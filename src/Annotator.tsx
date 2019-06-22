@@ -342,11 +342,18 @@ export class Annotator extends React.Component<Props, State>{
     chooseBox = (box: Box, showAnnotation: boolean = true) => {
         box.chosen = true;
         const { x, y, h } = this.getCurrentCoordinate(box);
+        const { height } = this.props;
         this.chosenBox = box;
+        let newY = y + h;
+        if (newY + 20 > height) {
+            // Annotation reaches the bottom
+            newY = y - 110;
+        }
+
         this.setState({
             annotation: box.annotation,
             x: x,
-            y: y + h,
+            y: newY,
             lock: box.lock
         });
         if (showAnnotation) {
