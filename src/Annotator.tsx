@@ -249,14 +249,12 @@ export class Annotator extends React.Component<Props, State>{
                 this.doZoom(-5);
             }
             else if (e.key === 'Enter' || e.keyCode == 13 || e.which == 13) {
-                console.log(e.key);
                 this.onUpload();
                 e.preventDefault();
                 e.stopPropagation();
             }
             // TODO: Add Drag / Move switch
             else {
-                console.log(e.key);
             }
         });
 
@@ -716,7 +714,6 @@ export class Annotator extends React.Component<Props, State>{
 
         this.props.asyncUpload(this.getPostData())
             .then(data => {
-                console.log(data);
                 this.setState({ uploadIcon: 'check', uploaded: true });
                 setTimeout(() => {
                     this.setState({ uploadIcon: "upload" });
