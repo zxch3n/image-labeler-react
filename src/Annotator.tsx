@@ -265,7 +265,8 @@ export class Annotator extends React.Component<Props, State>{
             this.lastY = null;
         });
 
-        this.canvas.addEventListener('mouseup', (e: MouseEvent) => {
+        // Uesr may mouse up outside of the canvas
+        window.addEventListener('mouseup', (e: MouseEvent) => {
             // TODO merge this and touch callback
             if (this.moveSmallDistance(e.clientX, e.clientY)) {
                 this.searchChosenBox();
@@ -281,8 +282,6 @@ export class Annotator extends React.Component<Props, State>{
         });
 
         this.canvas.addEventListener('mouseout', (e: MouseEvent) => {
-            this.setState({ mouse_down: false });
-            this.annotatingBox = undefined;
         });
 
         this.canvas.addEventListener('mousemove', (e: MouseEvent) => {
