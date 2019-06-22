@@ -113,6 +113,7 @@ export class Annotator extends React.Component<Props, State>{
     private isDrawing: boolean;
     private boxes: Box[];
     private bg: any;
+    private events: Array<[Element|Window, string, EventListener]>
 
     constructor(props: Props) {
         super(props);
@@ -139,6 +140,7 @@ export class Annotator extends React.Component<Props, State>{
         this.boxes = [];
         this.bg = new Image();
         this.bg.src = bg;
+        this.events = [];
     }
 
     componentWillReceiveProps(nextProps: Readonly<Props>, nextContext: any): void {
@@ -178,12 +180,35 @@ export class Annotator extends React.Component<Props, State>{
         this.initCanvas(this.props.imageUrl);
     }
 
+    componentWillUnmount() {
+        this.removeEvents();
+    }
+
+    registerEvent = (element: Element|Window, event: string, listener: EventListener) => {
+        element.addEventListener(event, listener);
+        this.events.push([element, event, listener]);
+    }
+
+    removeEvents = () => {
+        for (let i = 0; i < this.events.length; i++){
+            this.events[i][0].removeEventListener(this.events[i][1], this.events[i][2]);
+        }
+
+        this.events = [];
+    }
+
+    switchMode = () => {
+        this.setState((state)=>{
+            return {isAnnotating: !state.isAnnotating};
+        })
+    }
+
     setEventListeners = () => {
         if (this.canvas == null) {
             throw new Error("Canvas does not exist!");
         }
 
-        this.canvas.addEventListener('touchstart', (e: TouchEvent) => {
+        this.registerEvent(this.canvas, 'touchstart', (e: TouchEvent) => {
             if (e.targetTouches.length == 1) {
                 [this.startX, this.startY] = this.getOriginalXY(
                     e.targetTouches[0].clientX,
@@ -196,7 +221,7 @@ export class Annotator extends React.Component<Props, State>{
             this.lastZoomScale = null;
         });
 
-        this.canvas.addEventListener('touchmove', e => {
+        this.registerEvent(this.canvas, 'touchmove', (e: TouchEvent) => {
             if (this.canvas == null) {
                 throw new Error("Canvas does not exist!");
             }
@@ -212,7 +237,7 @@ export class Annotator extends React.Component<Props, State>{
             e.stopPropagation();
         });
 
-        this.canvas.addEventListener('touchend', (e: TouchEvent) => {
+        this.registerEvent(this.canvas, 'touchend', (e: TouchEvent) => {
             let isSmallDistance = false;
             if (e.targetTouches.length === 1) {
                 const x = e.targetTouches[0].clientX,
@@ -239,26 +264,23 @@ export class Annotator extends React.Component<Props, State>{
         // on desktop devices
 
         // keyboard+mouse
-        window.addEventListener('keyup', (e: KeyboardEvent) => {
+        this.registerEvent(window, 'keyup', (e: KeyboardEvent) => {
             if (e.key === '+' || e.key === '=' || e.keyCode == 38 || e.keyCode == 39) { //+
                 e.preventDefault();
                 this.doZoom(5);
-            }
-            else if (e.key === '-' || e.key === '_' || e.keyCode == 37 || e.keyCode == 40) {//-
+            } else if (e.key === '-' || e.key === '_' || e.keyCode == 37 || e.keyCode == 40) {//-
                 e.preventDefault();
                 this.doZoom(-5);
-            }
-            else if (e.key === 'Enter' || e.keyCode == 13 || e.which == 13) {
+            } else if (e.key === 'Enter' || e.keyCode == 13 || e.which == 13) {
                 this.onUpload();
                 e.preventDefault();
                 e.stopPropagation();
-            }
-            // TODO: Add Drag / Move switch
-            else {
+            } else if (e.key === 'Tab' || e.keyCode == 9 || e.which == 9){
+                this.switchMode();
             }
         });
 
-        this.canvas.addEventListener('mousedown', (e: MouseEvent) => {
+        this.registerEvent(this.canvas, 'mousedown', (e: MouseEvent) => {
             [this.startX, this.startY] = this.getOriginalXY(e.clientX, e.clientY);
             this.setState({ mouse_down: true });
             this.lastX = null;
@@ -266,7 +288,7 @@ export class Annotator extends React.Component<Props, State>{
         });
 
         // Uesr may mouse up outside of the canvas
-        window.addEventListener('mouseup', (e: MouseEvent) => {
+        this.registerEvent(window, 'mouseup', (e: MouseEvent) => {
             // TODO merge this and touch callback
             if (this.moveSmallDistance(e.clientX, e.clientY)) {
                 this.searchChosenBox();
@@ -281,10 +303,10 @@ export class Annotator extends React.Component<Props, State>{
             this.startY = undefined;
         });
 
-        this.canvas.addEventListener('mouseout', (e: MouseEvent) => {
-        });
+        // this.canvas.addEventListener('mouseout', (e: MouseEvent) => {
+        // });
 
-        this.canvas.addEventListener('mousemove', (e: MouseEvent) => {
+        this.registerEvent(this.canvas, 'mousemove', (e: MouseEvent) => {
             if (this.canvas == null) {
                 throw new Error("Canvas does not exist!");
             }
@@ -304,7 +326,7 @@ export class Annotator extends React.Component<Props, State>{
             // }
         });
 
-        this.canvas.addEventListener('wheel', (e: WheelEvent) => {
+        this.registerEvent(this.canvas, 'wheel', (e: WheelEvent) => {
             if (e.deltaY > 0) {
                 this.doZoom(-2);
             } else if (e.deltaY < 0) {
