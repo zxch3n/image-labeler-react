@@ -179,9 +179,11 @@ export class Annotator extends React.Component<Props, State>{
         this.setEventListeners();
         requestAnimationFrame(this.draw);
         this.initCanvas(this.props.imageUrl);
-        this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => {
-            return Box.fromBoundingBox(bbox);
-        });
+        if (this.props.defaultBoxes){
+            this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => {
+                return Box.fromBoundingBox(bbox);
+            });
+        }
     }
 
     componentWillUnmount() {
