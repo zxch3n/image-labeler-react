@@ -45,7 +45,6 @@ export default App;
 |   -    |  Zoom Out  |
 
 
-
 ## Props
 
 ```javascript
@@ -53,8 +52,9 @@ interface Props {
     imageUrl: string,
     height: number, // height of the labeling window
     width: number, // width of the labeling window
-    asyncUpload: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
     types: Array<string>, // annotation types
+    asyncUpload?: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
+    disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
     defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true

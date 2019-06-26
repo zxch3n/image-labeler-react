@@ -7,9 +7,10 @@ ReactDOM.render(
       <Annotator 
         height={600} 
         width={600} 
-        imageUrl={""} 
+        imageUrl={"https://i.postimg.cc/cJrdb8Sx/screenshot.png"} 
         asyncUpload={async (labeledData)=>{
             // upload labeled data
+            console.log(labeledData);
         }} 
         types={['A', 'B', 'Cylinder']}
         defaultType={"Cylinder"}
@@ -22,7 +23,16 @@ ReactDOM.render(
           backgroundColor: "#368",
           borderRadius: 8,
           padding: 10
-        }}/>
+        }}
+        defaultBoxes={[{
+          x: 316,
+          y: 305,
+          w: 65,
+          h: 61,
+          annotation: 'A'
+        }]}
+        disableAnnotation={true}
+        />
   </div>,
   document.body
 );

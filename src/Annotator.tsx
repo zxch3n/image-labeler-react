@@ -12,8 +12,9 @@ interface Props {
     imageUrl: string,
     height: number, // height of the labeling window
     width: number, // width of the labeling window
-    asyncUpload: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
     types: Array<string>, // annotation types
+    asyncUpload?: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
+    disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
     defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true
@@ -178,6 +179,9 @@ export class Annotator extends React.Component<Props, State>{
         this.setEventListeners();
         requestAnimationFrame(this.draw);
         this.initCanvas(this.props.imageUrl);
+        this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => {
+            return Box.fromBoundingBox(bbox);
+        });
     }
 
     componentWillUnmount() {
@@ -755,7 +759,11 @@ export class Annotator extends React.Component<Props, State>{
 
 
     render() {
-        const { width, height, sceneTypes, showButton = true, className = "", style = {}} = this.props;
+        let { width, height, sceneTypes, showButton = true, className = "", style = {}, disableAnnotation=false} = this.props;
+        if (disableAnnotation) {
+            showButton = false;
+        }
+
         if (!style.hasOwnProperty('position')){
             style['position'] = 'relative';
         }
@@ -764,7 +772,7 @@ export class Annotator extends React.Component<Props, State>{
         const shownStyle = Object.assign({}, style);
         let cursor = this.state.hover ? 'pointer' :
             (this.state.isAnnotating ? 'crosshair' : 'grab');
-        let isLocked = this.state.lock;
+        let isLocked = disableAnnotation || this.state.lock;
         let sceneTypeSelect = undefined;
         if (sceneTypes) {
             sceneTypeSelect = (
@@ -878,6 +886,7 @@ export class Annotator extends React.Component<Props, State>{
                                 margin: 4,
                                 float: 'left'
                             }}
+                            disabled={disableAnnotation}
                             onClick={() => {
                                 if (this.chosenBox) {
                                     if (this.chosenBox.lock) {
