@@ -1,6 +1,10 @@
 # Image Labeler ( Bounding Box Labeling Tool )
 
-A react component that helps labeling images. Support scaling images by mouse wheel and pinch gesture.
+A react component to build image-labeling-tool.
+
+- Label image with bounding boxes and scene types
+- Scale by wheel and gesture
+- Resize and move bounding boxes easily
 
 [![screenshot.png](https://i.postimg.cc/cJrdb8Sx/screenshot.png)](https://postimg.cc/t1G01JJw)
 

@@ -394,6 +394,8 @@ export class Annotator extends React.Component<Props, State>{
                 this.chooseBox(this.annotatingBox);
                 this.boxes.push(this.annotatingBox);
                 this.annotatingBox = undefined;
+            } else if (!this.state.isAnnotating && this.chosenBox) {
+                this.refreshBoxTipPosition()
             }
 
             this.startX = undefined;
@@ -449,6 +451,8 @@ export class Annotator extends React.Component<Props, State>{
                 this.chooseBox(this.annotatingBox);
                 this.boxes.push(this.annotatingBox);
                 this.annotatingBox = undefined;
+            } else if (this.chosenBox && !this.state.isAnnotating){
+                this.refreshBoxTipPosition();
             }
 
             this.setState({ mouse_down: false });
@@ -483,6 +487,7 @@ export class Annotator extends React.Component<Props, State>{
 
             if (e.target == this.canvas && this.state.mouse_down) {
                 this.doMove(relativeX, relativeY);
+                return;
             }
 
             if (!this.state.mouse_down) {
@@ -525,15 +530,15 @@ export class Annotator extends React.Component<Props, State>{
     };
 
     chooseBox = (box: Box, showAnnotation: boolean = true) => {
-        for (let box of this.boxes) {
-            box.chosen = false;
-        }
-
         if (box !== this.chosenBox) {
+            for (let box of this.boxes) {
+                box.chosen = false;
+            }
+
             this.setState({hoverEdge: undefined, isMovingBox: false});
+            box.chosen = true;
         }
 
-        box.chosen = true;
         const { x, y, h } = this.getCurrentCoordinate(box);
         const { height } = this.props;
         this.chosenBox = box;
@@ -549,7 +554,7 @@ export class Annotator extends React.Component<Props, State>{
             y: newY,
             lock: box.lock
         });
-        if (showAnnotation) {
+        if (showAnnotation && !this.state.showAnnotation) {
             this.setState({
                 showAnnotation: true
             });
@@ -557,7 +562,7 @@ export class Annotator extends React.Component<Props, State>{
     };
 
     refreshBoxTipPosition = () => {
-        if (this.chosenBox !== undefined) {
+        if (this.chosenBox) {
             this.chooseBox(this.chosenBox, false);
         }
     };
@@ -568,6 +573,7 @@ export class Annotator extends React.Component<Props, State>{
         }
 
         this.chosenBox.chosen = false;
+        this.chosenBox = undefined;
         this.setState({
             showAnnotation: false,
             annotation: '',
@@ -717,6 +723,7 @@ export class Annotator extends React.Component<Props, State>{
         this.scale.y = newScale;
         this.position.x = newPosX;
         this.position.y = newPosY;
+
         this.refreshBoxTipPosition();
     };
 
@@ -781,7 +788,6 @@ export class Annotator extends React.Component<Props, State>{
                 this.position.y = this.canvas.clientHeight - currentHeight - halfHeight;
             }
 
-            this.refreshBoxTipPosition();
         }
 
         this.lastX = relativeX;
