@@ -442,6 +442,9 @@ export class Annotator extends React.Component<Props, State>{
                 // User click
                 this.searchChosenBox();
             } 
+
+            // Box may be resized by dragging
+            this.refreshBoxTipPosition();
         });
 
         this.registerEvent(window, 'mouseup', ()=>{
