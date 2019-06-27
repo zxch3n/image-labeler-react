@@ -309,11 +309,18 @@ export class Annotator extends React.Component<Props, State>{
         });
 
         // Uesr may mouse up outside of the canvas
-        this.registerEvent(window, 'mouseup', (e: MouseEvent) => {
-            // TODO merge this and touch callback
+        this.registerEvent(this.canvas, 'mouseup', (e: MouseEvent) => {
+            // TODO: merge this and touch callback
             if (this.moveSmallDistance(e.clientX, e.clientY)) {
+                // User click
                 this.searchChosenBox();
-            } else if (this.annotatingBox !== undefined) {
+            } 
+        });
+
+        this.registerEvent(window, 'mouseup', ()=>{
+            // This apply to scenario when mouseup outside of the canvas
+            if (this.annotatingBox !== undefined) {
+                // User create new box
                 this.chooseBox(this.annotatingBox);
                 this.boxes.push(this.annotatingBox);
                 this.annotatingBox = undefined;
@@ -382,6 +389,10 @@ export class Annotator extends React.Component<Props, State>{
     };
 
     chooseBox = (box: Box, showAnnotation: boolean = true) => {
+        for (let box of this.boxes) {
+            box.chosen = false;
+        }
+
         box.chosen = true;
         const { x, y, h } = this.getCurrentCoordinate(box);
         const { height } = this.props;
@@ -479,7 +490,8 @@ export class Annotator extends React.Component<Props, State>{
 
     moveSmallDistance(pageX: number, pageY: number) {
         if (this.startX === undefined || this.startY === undefined) {
-            throw "startX is undefined";
+            // User may click outside of the canvas
+            return true;
         }
 
         const [newX, newY] = this.getOriginalXY(pageX, pageY);
