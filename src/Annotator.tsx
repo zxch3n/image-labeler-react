@@ -303,6 +303,8 @@ export class Annotator extends React.Component<Props, State>{
                 e.stopPropagation();
             } else if (e.key === 'Tab' || e.keyCode == 9 || e.which == 9){
                 this.switchMode();
+            } else if (e.key === 'Q' || e.key === 'q' || e.keyCode == 81 || e.which == 81){
+                this.onDelete();
             }
         });
 

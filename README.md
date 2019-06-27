@@ -41,6 +41,7 @@ export default App;
 |:-----------|:------|
 |   Enter    |  Upload  |
 |   Tab    |  Switch Mode (Annotate|Move)  |
+|   Q    |  Delete Bounding Box  |
 |   +    |  Zoom In  |
 |   -    |  Zoom Out  |
 
