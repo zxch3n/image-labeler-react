@@ -148,6 +148,7 @@ export class Annotator extends React.Component<Props, State>{
     }
 
     componentWillReceiveProps(nextProps: Readonly<Props>, nextContext: any): void {
+        // Merge this with componentDidMount
         if (nextProps.imageUrl !== this.props.imageUrl) {
             // New Image
             this.nextDefaultType = undefined;
@@ -156,6 +157,10 @@ export class Annotator extends React.Component<Props, State>{
                 this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox) => {
                     return Box.fromBoundingBox(bbox);
                 });
+
+                if (this.boxes.length !== 0){
+                    this.chooseBox(this.boxes[0]);
+                }
             }
         }
 
@@ -189,7 +194,18 @@ export class Annotator extends React.Component<Props, State>{
             this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => {
                 return Box.fromBoundingBox(bbox);
             });
+
+            if (this.boxes.length !== 0){
+                this.chooseBox(this.boxes[0]);
+            }
         }
+
+        this.registerEvent(this.image, 'load', ()=>{
+            // when image is loaded boxes position may shift, we need to re-locate the annotation position
+            if (this.chosenBox){
+                this.chooseBox(this.chosenBox);
+            }
+        });
 
         if (this.props.sceneTypes) {
             if (this.props.defaultSceneType) {
@@ -801,7 +817,7 @@ export class Annotator extends React.Component<Props, State>{
         this.nextDefaultType = chosen.annotation;
         const index = this.boxes.indexOf(chosen);
         this.boxes.splice(index, 1);
-        
+        this.setState({isAnnotating: true});
     }
 
     render() {
