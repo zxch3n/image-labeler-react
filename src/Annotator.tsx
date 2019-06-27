@@ -40,7 +40,9 @@ interface State {
     uploaded: boolean,
     x: number,
     y: number,
-    sceneType: string
+    sceneType: string,
+    hoverEdge?: string,
+    isMovingBox: boolean
 }
 
 interface BoundingBox {
@@ -52,6 +54,8 @@ interface BoundingBox {
 }
 
 
+const MARGIN = 16;
+const BOX_MIN_LENGTH = 16;
 class Box {
     public x: number;
     public y: number;
@@ -74,11 +78,38 @@ class Box {
     }
 
     insideBox(x: number, y: number) {
-        if (x >= this.x && y >= this.y && x <= this.x + this.w && y <= this.y + this.h) {
+        if (x >= this.x - MARGIN && y >= this.y - MARGIN && x <= this.x + this.w + MARGIN && y <= this.y + this.h + MARGIN) {
             return true;
         }
 
         return false;
+    }
+
+    insideInnerBox(x: number, y: number) {
+        if (x >= this.x + MARGIN && y >= this.y + MARGIN && x <= this.x + this.w - MARGIN && y <= this.y + this.h - MARGIN) {
+            return true;
+        }
+
+        return false;
+    }
+
+    getEdgeCursorIsOn(x: number, y: number) {
+        let min = MARGIN, direction = undefined;
+        const directions = {
+            'left': Math.abs(x - this.x),
+            'right': Math.abs(x - this.x - this.w),
+            'top': Math.abs(y - this.y),
+            'bottom': Math.abs(y - this.y - this.h),
+        }
+
+        for (let d in directions) {
+            if (directions[d] < min) {
+                direction = d;
+                min = directions[d];
+            }
+        }
+
+        return direction;
     }
 
     getData() {
@@ -90,6 +121,42 @@ class Box {
         const box = new Box(data.x, data.y, data.w, data.h);
         box.annotation = data.annotation;
         return box;
+    }
+
+
+    moveBoxByDrag (xMovement: number, yMovement: number) {
+        this.x += xMovement;
+        this.y += yMovement;
+    }
+
+    resizeByDrag (edge?: string, xMovement: number, yMovement: number) {
+        if (edge === undefined) {
+            return;
+        }
+
+        switch (edge) {
+            case 'left':
+                xMovement = Math.min(xMovement, this.w - BOX_MIN_LENGTH);
+                this.x += xMovement;
+                this.w -= xMovement;
+                break;
+            
+            case 'right':
+                xMovement = Math.max(xMovement, - this.w + BOX_MIN_LENGTH);
+                this.w += xMovement;
+                break;
+
+            case 'top':
+                yMovement = Math.min(yMovement, this.h - BOX_MIN_LENGTH);
+                this.y += yMovement;
+                this.h -= yMovement;
+                break;
+
+            case 'bottom':
+                yMovement = Math.max(yMovement, - this.h + BOX_MIN_LENGTH);
+                this.h += yMovement;
+                break;
+        }
     }
 
     // TODO move draw here
@@ -110,6 +177,8 @@ export class Annotator extends React.Component<Props, State>{
     private scale: D2;
     private startX: undefined | number;
     private startY: undefined | number;
+    private dragX?: number;
+    private dragY?: number;
     private annotatingBox: undefined | Box;
     private chosenBox: undefined | Box;
     private isDrawing: boolean;
@@ -135,7 +204,9 @@ export class Annotator extends React.Component<Props, State>{
             annotation: '',
             sceneType: '',
             x: 0,
-            y: 0
+            y: 0,
+            hoverEdge: undefined,
+            isMovingBox: false,
         };
         this.chosenBox = undefined;
         this.annotatingBox = undefined;
@@ -201,6 +272,18 @@ export class Annotator extends React.Component<Props, State>{
         }
 
         this.registerEvent(this.image, 'load', ()=>{
+            this.setState({ uploaded: false, uploadIcon: 'upload' });
+            if (this.image.naturalWidth !== 0) {
+                let scale = this.props.width / this.image.naturalWidth;
+                scale = Math.min(this.props.height / this.image.naturalHeight, scale);
+                this.scale.x = scale;
+                this.scale.y = scale;
+            }
+
+            if (this.ctx) {
+                this.draw();
+            }
+
             // when image is loaded boxes position may shift, we need to re-locate the annotation position
             if (this.chosenBox){
                 this.chooseBox(this.chosenBox);
@@ -254,6 +337,8 @@ export class Annotator extends React.Component<Props, State>{
                     e.targetTouches[0].clientX,
                     e.targetTouches[0].clientY
                 )
+
+                this.dragX = this.startX; this.dragY = this.startY;
             }
 
             this.lastX = null;
@@ -263,18 +348,34 @@ export class Annotator extends React.Component<Props, State>{
 
         this.registerEvent(this.canvas, 'touchmove', (e: TouchEvent) => {
             if (this.canvas == null) {
-                throw new Error("Canvas does not exist!");
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            let relativeX = e.targetTouches[0].clientX - this.canvas.getBoundingClientRect().left;
+            let relativeY = e.targetTouches[0].clientY - this.canvas.getBoundingClientRect().top;
+            let { x, y } = this.invertTransform(relativeX, relativeY);
+
+            // Move box should have the highest priority
+            if (this.chosenBox && this.dragX && this.dragY && this.chosenBox.insideInnerBox(x, y)) {
+                this.chosenBox.moveBoxByDrag(x - this.dragX, y - this.dragY);
+                this.dragX = x; this.dragY = y;
+                return;
+            }
+
+            if (this.chosenBox && this.dragX && this.dragY) {
+                this.chosenBox.resizeByDrag(this.chosenBox.getEdgeCursorIsOn(x, y), x - this.dragX, y - this.dragY);
+                this.dragX = x; this.dragY = y;
+                return;
             }
 
             if (e.targetTouches.length == 2) { //pinch
                 this.doZoom(this.gesturePinchZoom(e));
             } else if (e.targetTouches.length == 1) {
-                let relativeX = e.targetTouches[0].clientX - this.canvas.getBoundingClientRect().left;
-                let relativeY = e.targetTouches[0].clientY - this.canvas.getBoundingClientRect().top;
                 this.doMove(relativeX, relativeY);
             }
-            e.preventDefault();
-            e.stopPropagation();
         });
 
         this.registerEvent(this.canvas, 'touchend', (e: TouchEvent) => {
@@ -297,6 +398,7 @@ export class Annotator extends React.Component<Props, State>{
 
             this.startX = undefined;
             this.startY = undefined;
+            this.dragX = this.startX; this.dragY = this.startY;
         });
 
 
@@ -325,6 +427,7 @@ export class Annotator extends React.Component<Props, State>{
 
         this.registerEvent(this.canvas, 'mousedown', (e: MouseEvent) => {
             [this.startX, this.startY] = this.getOriginalXY(e.clientX, e.clientY);
+            this.dragX = this.startX; this.dragY = this.startY;
             this.setState({ mouse_down: true });
             this.lastX = null;
             this.lastY = null;
@@ -351,18 +454,32 @@ export class Annotator extends React.Component<Props, State>{
             this.setState({ mouse_down: false });
             this.startX = undefined;
             this.startY = undefined;
+            this.dragX = this.startX; this.dragY = this.startY;
         });
 
-        // this.canvas.addEventListener('mouseout', (e: MouseEvent) => {
-        // });
 
         this.registerEvent(this.canvas, 'mousemove', (e: MouseEvent) => {
             if (this.canvas == null) {
-                throw new Error("Canvas does not exist!");
+                return;
             }
 
             let relativeX = e.clientX - this.canvas.getBoundingClientRect().left;
             let relativeY = e.clientY - this.canvas.getBoundingClientRect().top;
+            let { x, y } = this.invertTransform(relativeX, relativeY);
+
+
+            // Move box should have the highest priority
+            if (this.state.isMovingBox && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
+                this.chosenBox.moveBoxByDrag(x - this.dragX, y - this.dragY);
+                this.dragX = x; this.dragY = y;
+                return;
+            }
+
+            if (this.state.hoverEdge && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
+                this.chosenBox.resizeByDrag(this.state.hoverEdge, x - this.dragX, y - this.dragY);
+                this.dragX = x; this.dragY = y;
+                return;
+            }
 
             if (e.target == this.canvas && this.state.mouse_down) {
                 this.doMove(relativeX, relativeY);
@@ -371,9 +488,6 @@ export class Annotator extends React.Component<Props, State>{
             if (!this.state.mouse_down) {
                 this.mouseHoverCheck(e.clientX, e.clientY);
             }
-            // if(relativeX <= 0 || relativeX >= this.props.width || relativeY <= 0 || relativeY >= this.props.height) {
-            //     this.mouse_down = false;
-            // }
         });
 
         this.registerEvent(this.canvas, 'wheel', (e: WheelEvent) => {
@@ -415,6 +529,10 @@ export class Annotator extends React.Component<Props, State>{
             box.chosen = false;
         }
 
+        if (box !== this.chosenBox) {
+            this.setState({hoverEdge: undefined, isMovingBox: false});
+        }
+
         box.chosen = true;
         const { x, y, h } = this.getCurrentCoordinate(box);
         const { height } = this.props;
@@ -452,7 +570,9 @@ export class Annotator extends React.Component<Props, State>{
         this.chosenBox.chosen = false;
         this.setState({
             showAnnotation: false,
-            annotation: ''
+            annotation: '',
+            hoverEdge: undefined,
+            isMovingBox: false
         });
     };
 
@@ -485,7 +605,14 @@ export class Annotator extends React.Component<Props, State>{
             }
         }
 
-        this.setState({ hover: anyHover });
+        let edge = undefined;
+        let isMovingBox = false;
+        if (this.chosenBox && this.chosenBox.hover) {
+            edge = this.chosenBox.getEdgeCursorIsOn(x, y);
+            isMovingBox = this.chosenBox.insideInnerBox(x, y);
+        }
+
+        this.setState({ hover: anyHover, hoverEdge: edge, isMovingBox});
     }
 
     invertTransform(x: number, y: number) {
@@ -750,22 +877,10 @@ export class Annotator extends React.Component<Props, State>{
         this.isDrawing = true;
         this.position.x = 0;
         this.position.y = 0;
-        this.image.onload = () => {
-            this.setState({ uploaded: false, uploadIcon: 'upload' });
-            if (this.image.naturalWidth !== 0 && url.length > 10) {
-                let scale = this.props.width / this.image.naturalWidth;
-                scale = Math.min(this.props.height / this.image.naturalHeight, scale);
-                this.scale.x = scale;
-                this.scale.y = scale;
-            }
-
-            if (this.ctx) {
-                this.draw();
-            }
-        };
         this.chosenBox = undefined;
         this.boxes = [];
         this.annotatingBox = undefined;
+        this.setState({hoverEdge: undefined, isMovingBox: false});
     };
 
     getPostData = () => {
@@ -834,6 +949,15 @@ export class Annotator extends React.Component<Props, State>{
         const shownStyle = Object.assign({}, style);
         let cursor = this.state.hover ? 'pointer' :
             (this.state.isAnnotating ? 'crosshair' : 'grab');
+        if (this.state.isMovingBox) {
+            cursor = 'move';
+        } else if (this.state.hoverEdge) {
+            if (this.state.hoverEdge === 'left' || this.state.hoverEdge === 'right'){
+                cursor = 'e-resize';
+            } else {
+                cursor = 'n-resize';
+            }
+        }
         let isLocked = disableAnnotation || this.state.lock;
         let sceneTypeSelect = undefined;
         if (sceneTypes) {
