@@ -16,6 +16,7 @@ interface Props {
     asyncUpload?: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
     disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
+    defaultSceneType?: string, // default sceneType, can be empty
     defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true
     sceneTypes?: Array<string>,
@@ -157,7 +158,11 @@ export class Annotator extends React.Component<Props, State>{
 
         if (nextProps.sceneTypes !== this.props.sceneTypes) {
             if (nextProps.sceneTypes){
-                this.setState({sceneType: nextProps.sceneTypes[0]});
+                if (nextProps.defaultSceneType) {
+                    this.setState({sceneType: nextProps.defaultSceneType});
+                } else {
+                    this.setState({sceneType: nextProps.sceneTypes[0]});
+                }
             } else {
                 this.setState({sceneType: ''});
             }
@@ -570,6 +575,7 @@ export class Annotator extends React.Component<Props, State>{
         } else {
             this.annotatingBox.annotation = this.props.types[0];
         }
+
     };
 
     dragMove = (relativeX: number, relativeY: number) => {
@@ -715,9 +721,6 @@ export class Annotator extends React.Component<Props, State>{
         this.chosenBox = undefined;
         this.boxes = [];
         this.annotatingBox = undefined;
-        if (this.props.sceneTypes){
-            this.setState({sceneType: this.props.sceneTypes[0]});
-        }
     };
 
     getPostData = () => {

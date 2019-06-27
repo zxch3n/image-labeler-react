@@ -15,6 +15,7 @@ ReactDOM.render(
         types={['A', 'B', 'Cylinder']}
         defaultType={"Cylinder"}
         sceneTypes={['1', '2', '3']}
+        defaultSceneType={'3'}
         style={{
           width: 640,
           height: 680,
@@ -31,7 +32,7 @@ ReactDOM.render(
           h: 61,
           annotation: 'A'
         }]}
-        disableAnnotation={true}
+        disableAnnotation={false}
         />
   </div>,
   document.body

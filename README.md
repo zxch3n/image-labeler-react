@@ -56,6 +56,7 @@ interface Props {
     asyncUpload?: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
     disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
+    defaultSceneType?: string, // default sceneType, can be empty
     defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true
     sceneTypes?: Array<string>, // if provided, the sceneType select box will show up
