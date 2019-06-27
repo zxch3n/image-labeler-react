@@ -115,7 +115,8 @@ export class Annotator extends React.Component<Props, State>{
     private isDrawing: boolean;
     private boxes: Box[];
     private bg: any;
-    private events: Array<[Element|Window, string, EventListener]>
+    private events: Array<[Element|Window, string, EventListener]>;
+    private nextDefaultType?: string; // When deleting, add next defaultType
 
     constructor(props: Props) {
         super(props);
@@ -143,11 +144,13 @@ export class Annotator extends React.Component<Props, State>{
         this.bg = new Image();
         this.bg.src = bg;
         this.events = [];
+        this.nextDefaultType = undefined;
     }
 
     componentWillReceiveProps(nextProps: Readonly<Props>, nextContext: any): void {
         if (nextProps.imageUrl !== this.props.imageUrl) {
             // New Image
+            this.nextDefaultType = undefined;
             this.initCanvas(nextProps.imageUrl);
             if (nextProps.defaultBoxes){
                 this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox) => {
@@ -199,6 +202,8 @@ export class Annotator extends React.Component<Props, State>{
         } else {
             this.setState({ sceneType: '' });
         }
+
+        this.nextDefaultType = undefined;
     }
 
     componentWillUnmount() {
@@ -592,12 +597,13 @@ export class Annotator extends React.Component<Props, State>{
             Math.abs(y - this.startY)
         );
 
-        if (this.props.defaultType) {
+        if (this.nextDefaultType) {
+            this.annotatingBox.annotation = this.nextDefaultType;
+        } else if (this.props.defaultType) {
             this.annotatingBox.annotation = this.props.defaultType;
         } else {
             this.annotatingBox.annotation = this.props.types[0];
         }
-
     };
 
     dragMove = (relativeX: number, relativeY: number) => {
@@ -785,6 +791,19 @@ export class Annotator extends React.Component<Props, State>{
     };
 
 
+    onDelete = () => {
+        const chosen = this.chosenBox;
+        this.nextDefaultType = chosen.annotation;
+        this.cancelChosenBox();
+        if (chosen === undefined) {
+            return;
+        }
+
+        const index = this.boxes.indexOf(chosen);
+        this.boxes.splice(index, 1);
+        
+    }
+
     render() {
         let { width, height, sceneTypes, showButton = true, className = "", style = {}, disableAnnotation=false} = this.props;
         if (disableAnnotation) {
@@ -935,16 +954,7 @@ export class Annotator extends React.Component<Props, State>{
                                 margin: 4
                             }}
                             disabled={isLocked}
-                            onClick={() => {
-                                const chosen = this.chosenBox;
-                                this.cancelChosenBox();
-                                if (chosen === undefined) {
-                                    return;
-                                }
-
-                                const index = this.boxes.indexOf(chosen);
-                                this.boxes.splice(index, 1);
-                            }}
+                            onClick={this.onDelete}
                         />
                     </Form>
                 </div>
