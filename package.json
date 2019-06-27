@@ -1,6 +1,6 @@
 {
   "name": "image-labeler-react",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Image labeler React component. It is used to label image data for object detection task.",
   "main": "dist/Annotator.js",
   "scripts": {
