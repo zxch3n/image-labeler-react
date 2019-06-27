@@ -159,16 +159,14 @@ export class Annotator extends React.Component<Props, State>{
             }
         }
 
-        if (nextProps.sceneTypes !== this.props.sceneTypes || nextProps.defaultSceneType !== this.props.defaultSceneType) {
-            if (nextProps.sceneTypes){
-                if (nextProps.defaultSceneType) {
-                    this.setState({sceneType: nextProps.defaultSceneType});
-                } else {
-                    this.setState({sceneType: nextProps.sceneTypes[0]});
-                }
+        if (nextProps.sceneTypes){
+            if (nextProps.defaultSceneType) {
+                this.setState({sceneType: nextProps.defaultSceneType});
             } else {
-                this.setState({sceneType: ''});
+                this.setState({sceneType: nextProps.sceneTypes[0]});
             }
+        } else {
+            this.setState({sceneType: ''});
         }
     }
 
