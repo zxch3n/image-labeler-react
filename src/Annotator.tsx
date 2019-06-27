@@ -319,6 +319,7 @@ export class Annotator extends React.Component<Props, State>{
                 this.switchMode();
             } else if (e.key === 'Q' || e.key === 'q' || e.keyCode == 81 || e.which == 81){
                 this.onDelete();
+                this.setState({isAnnotating: true});
             }
         });
 
@@ -817,7 +818,6 @@ export class Annotator extends React.Component<Props, State>{
         this.nextDefaultType = chosen.annotation;
         const index = this.boxes.indexOf(chosen);
         this.boxes.splice(index, 1);
-        this.setState({isAnnotating: true});
     }
 
     render() {
