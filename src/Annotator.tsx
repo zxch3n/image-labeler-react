@@ -297,7 +297,7 @@ export class Annotator extends React.Component<Props, State>{
             } else if (e.key === '-' || e.key === '_' || e.keyCode == 37 || e.keyCode == 40) {//-
                 e.preventDefault();
                 this.doZoom(-5);
-            } else if (e.key === 'Enter' || e.keyCode == 13 || e.which == 13) {
+            } else if (e.key === 'Enter' || e.keyCode == 13 || e.which == 13 || e.key === '(space)' || e.keyCode == 32 || e.which == 32) {
                 this.onUpload();
                 e.preventDefault();
                 e.stopPropagation();

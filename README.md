@@ -39,7 +39,7 @@ export default App;
 
 |Shortcut Key| Action|
 |:-----------|:------|
-|   Enter    |  Upload  |
+|   Enter / Space    |  Upload  |
 |   Tab    |  Switch Mode (Annotate|Move)  |
 |   Q    |  Delete Bounding Box  |
 |   +    |  Zoom In  |
