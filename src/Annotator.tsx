@@ -129,7 +129,7 @@ class Box {
         this.y += yMovement;
     }
 
-    resizeByDrag (edge?: string, xMovement: number, yMovement: number) {
+    resizeByDrag (edge: string|undefined, xMovement: number, yMovement: number) {
         if (edge === undefined) {
             return;
         }
