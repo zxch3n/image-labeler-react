@@ -156,7 +156,7 @@ export class Annotator extends React.Component<Props, State>{
             }
         }
 
-        if (nextProps.sceneTypes !== this.props.sceneTypes) {
+        if (nextProps.sceneTypes !== this.props.sceneTypes || nextProps.defaultSceneType !== this.props.defaultSceneType) {
             if (nextProps.sceneTypes){
                 if (nextProps.defaultSceneType) {
                     this.setState({sceneType: nextProps.defaultSceneType});

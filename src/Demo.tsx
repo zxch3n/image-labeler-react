@@ -1,21 +1,43 @@
-import React from "react";
+import React, {useState} from "react";
 import ReactDOM from "react-dom";
-import {Annotator} from './Annotator';
+import { Annotator } from './Annotator';
 
-ReactDOM.render(
-  <div>
-      <Annotator 
-        height={600} 
-        width={600} 
-        imageUrl={"https://i.postimg.cc/cJrdb8Sx/screenshot.png"} 
-        asyncUpload={async (labeledData)=>{
-            // upload labeled data
-            console.log(labeledData);
-        }} 
+
+const Component: React.FC = (props) => {
+  const [defaultSceneType, setDefault] = useState(undefined);
+  const [url, setUrl] = useState("https://i.postimg.cc/cJrdb8Sx/screenshot.png");
+
+  return (
+    <div>
+      <div style={{
+        height: 100,
+        width: 100,
+        backgroundColor: 'black',
+      }} onClick={()=>{
+        if (defaultSceneType === undefined){
+          setTimeout(()=>{
+            setUrl("");
+            setDefault('3');
+          }, 500);
+        } else {
+          setTimeout(()=>{
+            setUrl("https://i.postimg.cc/cJrdb8Sx/screenshot.png");
+            setDefault(undefined);
+          }, 500);
+        }
+      }}/>
+      <Annotator
+        height={600}
+        width={600}
+        imageUrl={url}
+        asyncUpload={async (labeledData) => {
+          // upload labeled data
+          console.log(labeledData);
+        }}
         types={['A', 'B', 'Cylinder']}
         defaultType={"Cylinder"}
         sceneTypes={['1', '2', '3']}
-        defaultSceneType={undefined}
+        defaultSceneType={defaultSceneType}
         style={{
           width: 640,
           height: 680,
@@ -33,8 +55,13 @@ ReactDOM.render(
           annotation: 'A'
         }]}
         disableAnnotation={false}
-        />
-  </div>,
+      />
+    </div>
+  )
+};
+
+ReactDOM.render(
+  <Component />,
   document.body
 );
 
