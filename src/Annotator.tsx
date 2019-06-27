@@ -189,6 +189,16 @@ export class Annotator extends React.Component<Props, State>{
                 return Box.fromBoundingBox(bbox);
             });
         }
+
+        if (this.props.sceneTypes) {
+            if (this.props.defaultSceneType) {
+                this.setState({ sceneType: this.props.defaultSceneType });
+            } else {
+                this.setState({ sceneType: this.props.sceneTypes[0] });
+            }
+        } else {
+            this.setState({ sceneType: '' });
+        }
     }
 
     componentWillUnmount() {

@@ -15,7 +15,7 @@ ReactDOM.render(
         types={['A', 'B', 'Cylinder']}
         defaultType={"Cylinder"}
         sceneTypes={['1', '2', '3']}
-        defaultSceneType={'3'}
+        defaultSceneType={undefined}
         style={{
           width: 640,
           height: 680,
