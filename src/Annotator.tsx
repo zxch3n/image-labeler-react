@@ -795,12 +795,12 @@ export class Annotator extends React.Component<Props, State>{
 
     onDelete = () => {
         const chosen = this.chosenBox;
-        this.nextDefaultType = chosen.annotation;
-        this.cancelChosenBox();
         if (chosen === undefined) {
             return;
         }
 
+        this.cancelChosenBox();
+        this.nextDefaultType = chosen.annotation;
         const index = this.boxes.indexOf(chosen);
         this.boxes.splice(index, 1);
         
