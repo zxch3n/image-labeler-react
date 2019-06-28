@@ -471,10 +471,17 @@ export class Annotator extends React.Component<Props, State>{
     };
 
     onWheel = (e: WheelEvent) => {
+        if (this.canvas == null) {
+            return;
+        }
+
+        let relativeX = e.clientX - this.canvas.getBoundingClientRect().left;
+        let relativeY = e.clientY - this.canvas.getBoundingClientRect().top;
+        let { x, y } = this.invertTransform(relativeX, relativeY);
         if (e.deltaY > 0) {
-            this.doZoom(-2);
+            this.doZoom(-2, x, y);
         } else if (e.deltaY < 0) {
-            this.doZoom(2);
+            this.doZoom(2, x, y);
         }
 
         e.stopPropagation();
@@ -684,11 +691,22 @@ export class Annotator extends React.Component<Props, State>{
         return zoom * 0.2;
     };
 
-    doZoom = (zoom: number) => {
+    doZoom = (
+            zoom: number, 
+            x: number|null = null,
+            y: number|null = null
+        ) => {
         if (!zoom) return;
         zoom *= 4;
         if (this.canvas == null) {
             throw "Canvas does not exist!";
+        }
+
+        if (x == null || y == null) {
+            let canvasmiddleX = this.canvas.clientWidth / 2;
+            let canvasmiddleY = this.canvas.clientHeight / 2;
+            x = -this.position.x + canvasmiddleX;
+            y = -this.position.y + canvasmiddleY;
         }
 
         let currentScale = this.scale.x;
@@ -703,27 +721,20 @@ export class Annotator extends React.Component<Props, State>{
         //by default scale doesnt change position and only add/remove pixel to right and bottom
         //so we must move the image to the left to keep the image centered
         //ex: coefX and coefY = 0.5 when image is centered <=> move image to the left 0.5x pixels added to the right
-        let canvasmiddleX = this.canvas.clientWidth / 2;
-        let canvasmiddleY = this.canvas.clientHeight / 2;
-        let xonmap = (-this.position.x) + canvasmiddleX;
-        let yonmap = (-this.position.y) + canvasmiddleY;
-        let coefX = -xonmap / (currentWidth);
-        let coefY = -yonmap / (currentHeight);
+        let coefX = -x / (currentWidth);
+        let coefY = -y / (currentHeight);
         let newPosX = this.position.x + deltaWidth * coefX;
         let newPosY = this.position.y + deltaHeight * coefY;
 
-        //edges cases
+        // Zoom in / zoom out threshold
         let newWidth = currentWidth + deltaWidth;
         let newHeight = currentHeight + deltaHeight;
-
-        if (newWidth < this.props.height / 2) return;
-        if (newPosX > 0) { newPosX = 0; }
-        if (newPosX + newWidth < this.canvas.clientWidth) { newPosX = this.canvas.clientWidth - newWidth; }
-
-        if (newHeight < this.props.height / 2) return;
-        if (newPosY > 0) { newPosY = 0; }
-        if (newPosY + newHeight < this.canvas.clientHeight) { newPosY = this.canvas.clientHeight - newHeight; }
-
+        if (newWidth < this.props.height / 2 || newWidth > this.props.width * 8) {
+            return;
+        }
+        if (newHeight < this.props.height / 2 || newHeight > this.props.height * 8) {
+            return;
+        }
 
         //finally affectations
         this.scale.x = newScale;
@@ -829,6 +840,7 @@ export class Annotator extends React.Component<Props, State>{
             this.ctx.fillStyle = 'rgba(250, 50, 50, 0.3)';
             this.ctx.fillRect(this.annotatingBox.x, this.annotatingBox.y, this.annotatingBox.w, this.annotatingBox.h);
             this.ctx.restore();
+            this.ctx.globalAlpha = 0.3;
         }
 
         this.ctx.fillStyle = "#f00";
