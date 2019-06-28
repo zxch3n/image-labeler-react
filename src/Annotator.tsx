@@ -251,6 +251,7 @@ export class Annotator extends React.Component<Props, State>{
         if (this.canvas == null) {
             throw new Error("Canvas does not exist");
         }
+
         let context = this.canvas.getContext('2d');
         if (context !== null) {
             this.ctx = context;
@@ -465,50 +466,53 @@ export class Annotator extends React.Component<Props, State>{
         });
 
 
-        this.registerEvent(this.canvas, 'mousemove', (e: MouseEvent) => {
-            if (this.canvas == null) {
-                return;
-            }
-
-            let relativeX = e.clientX - this.canvas.getBoundingClientRect().left;
-            let relativeY = e.clientY - this.canvas.getBoundingClientRect().top;
-            let { x, y } = this.invertTransform(relativeX, relativeY);
-
-
-            // Move box should have the highest priority
-            if (this.state.isMovingBox && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
-                this.chosenBox.moveBoxByDrag(x - this.dragX, y - this.dragY);
-                this.dragX = x; this.dragY = y;
-                return;
-            }
-
-            if (this.state.hoverEdge && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
-                this.chosenBox.resizeByDrag(this.state.hoverEdge, x - this.dragX, y - this.dragY);
-                this.dragX = x; this.dragY = y;
-                return;
-            }
-
-            if (e.target == this.canvas && this.state.mouse_down) {
-                this.doMove(relativeX, relativeY);
-                return;
-            }
-
-            if (!this.state.mouse_down) {
-                this.mouseHoverCheck(e.clientX, e.clientY);
-            }
-        });
-
-        this.registerEvent(this.canvas, 'wheel', (e: WheelEvent) => {
-            if (e.deltaY > 0) {
-                this.doZoom(-2);
-            } else if (e.deltaY < 0) {
-                this.doZoom(2);
-            }
-
-            e.stopPropagation();
-            e.preventDefault();
-        });
+        this.registerEvent(this.canvas, 'mousemove', this.onMouseMove);
+        this.registerEvent(this.canvas, 'wheel', this.onWheel);
     };
+
+    onWheel = (e: WheelEvent) => {
+        if (e.deltaY > 0) {
+            this.doZoom(-2);
+        } else if (e.deltaY < 0) {
+            this.doZoom(2);
+        }
+
+        e.stopPropagation();
+        e.preventDefault();
+    }
+
+    onMouseMove = (e: MouseEvent) => {
+        if (this.canvas == null) {
+            return;
+        }
+
+        let relativeX = e.clientX - this.canvas.getBoundingClientRect().left;
+        let relativeY = e.clientY - this.canvas.getBoundingClientRect().top;
+        let { x, y } = this.invertTransform(relativeX, relativeY);
+
+
+        // Move box should have the highest priority
+        if (this.state.isMovingBox && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
+            this.chosenBox.moveBoxByDrag(x - this.dragX, y - this.dragY);
+            this.dragX = x; this.dragY = y;
+            return;
+        }
+
+        if (this.state.hoverEdge && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
+            this.chosenBox.resizeByDrag(this.state.hoverEdge, x - this.dragX, y - this.dragY);
+            this.dragX = x; this.dragY = y;
+            return;
+        }
+
+        if (e.target == this.canvas && this.state.mouse_down) {
+            this.doMove(relativeX, relativeY);
+            return;
+        }
+
+        if (!this.state.mouse_down) {
+            this.mouseHoverCheck(e.clientX, e.clientY);
+        }
+    }
 
     searchChosenBox = () => {
         let chosen = undefined;
@@ -546,7 +550,7 @@ export class Annotator extends React.Component<Props, State>{
         const { height } = this.props;
         this.chosenBox = box;
         let newY = y + h;
-        if (newY + 20 > height) {
+        if (newY + 100 > height) {
             // Annotation reaches the bottom
             newY = y - 110;
         }
@@ -830,25 +834,36 @@ export class Annotator extends React.Component<Props, State>{
         this.ctx.fillStyle = "#f00";
         for (let i = 0; i < this.boxes.length; i++) {
             let box = this.boxes[i];
-            this.ctx.lineWidth = 5;
-            this.ctx.strokeStyle = '#555';
-            this.ctx.strokeRect(box.x, box.y, box.w, box.h);
             const fontSize = 30 / this.scale.x;
             if (box.chosen) {
-                this.ctx.fillStyle = 'rgba(255, 100, 145, 0.45)';
-                this.ctx.fillRect(box.x, box.y, box.w, box.h);
-                this.ctx.strokeStyle = 'rgba(255, 100, 100, 1)';
-                this.ctx.lineWidth = 10 / this.scale.x;
-                this.ctx.strokeRect(box.x, box.y, box.w, box.h);
-                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                this.ctx.lineWidth = 4 / this.scale.x;
-                this.ctx.strokeRect(box.x + margin, box.y + margin, box.w - margin * 2, box.h - margin * 2)
-                // text
-                this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
-                this.ctx.textAlign = 'center';
-                this.ctx.font = fontSize + 'px Ubuntu';
-                this.ctx.fillText(box.annotation, box.x + box.w / 2, box.y + box.h / 2 + fontSize / 2);
+                if (box.hover){
+                    this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                    this.ctx.lineWidth = 2 / this.scale.x;
+                    this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+                } else {
+                    this.ctx.lineWidth = 5;
+                    this.ctx.strokeStyle = '#555';
+                    this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+
+                    this.ctx.fillStyle = 'rgba(255, 100, 145, 0.45)';
+                    this.ctx.fillRect(box.x, box.y, box.w, box.h);
+                    this.ctx.strokeStyle = 'rgba(255, 100, 100, 1)';
+                    this.ctx.lineWidth = 10 / this.scale.x;
+                    this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    this.ctx.lineWidth = 4 / this.scale.x;
+                    this.ctx.strokeRect(box.x + margin, box.y + margin, box.w - margin * 2, box.h - margin * 2)
+                    // text
+                    this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.font = fontSize + 'px Ubuntu';
+                    this.ctx.fillText(box.annotation, box.x + box.w / 2, box.y + box.h / 2 + fontSize / 2);
+                }
             } else if (box.hover) {
+                this.ctx.lineWidth = 5;
+                this.ctx.strokeStyle = '#555';
+                this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+
                 this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
                 this.ctx.fillRect(box.x, box.y, box.w, box.h);
                 // text
@@ -857,6 +872,10 @@ export class Annotator extends React.Component<Props, State>{
                 this.ctx.font = fontSize + 'px Ubuntu';
                 this.ctx.fillText(box.annotation, box.x + box.w / 2, box.y + box.h / 2 + fontSize / 2);
             } else {
+                this.ctx.lineWidth = 5;
+                this.ctx.strokeStyle = '#555';
+                this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+
                 this.ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
                 this.ctx.lineWidth = 3 / this.scale.x;
                 this.ctx.strokeRect(box.x + margin, box.y + margin, box.w - margin * 2, box.h - margin * 2)
@@ -946,6 +965,11 @@ export class Annotator extends React.Component<Props, State>{
 
     render() {
         let { width, height, sceneTypes, showButton = true, className = "", style = {}, disableAnnotation=false} = this.props;
+        let { showAnnotation, hover, mouse_down } = this.state;
+        if (showAnnotation && hover && mouse_down) {
+            showAnnotation = false;
+        }
+
         if (disableAnnotation) {
             showButton = false;
         }
@@ -1048,7 +1072,7 @@ export class Annotator extends React.Component<Props, State>{
                     <Form
                         className="canvas-annotation"
                         style={{
-                            display: this.state.showAnnotation ? 'block' : 'none',
+                            display: showAnnotation? 'block' : 'none',
                             position: 'absolute',
                             left: this.state.x,
                             top: this.state.y + 10,
