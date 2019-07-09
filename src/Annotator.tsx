@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Button, Form, Select } from 'antd';
+import { Button, Form, Select} from 'antd';
 import 'antd/lib/button/style/css';
 import 'antd/lib/form/style/css';
 import 'antd/lib/select/style/css';
@@ -420,8 +420,9 @@ export class Annotator extends React.Component<Props, State>{
                 this.onUpload();
                 e.preventDefault();
                 e.stopPropagation();
-            } else if (e.key === 'Tab' || e.keyCode == 9 || e.which == 9){
+            } else if (e.key === '`' || e.keyCode == 192 || e.which == 192){
                 this.switchMode();
+                return false;
             } else if (e.key === 'Q' || e.key === 'q' || e.keyCode == 81 || e.which == 81){
                 this.onDelete();
                 this.setState({isAnnotating: true});
@@ -938,10 +939,16 @@ export class Annotator extends React.Component<Props, State>{
         return data;
     };
 
+    onReload = ()=> {
+        location.reload();
+    }
+
     onUpload = () => {
         if (this.props.asyncUpload == null) {
             return;
         }
+        if(confirm("确定要提交吗")==false)
+            return;
 
         this.setState({
             uploadIcon: 'loading',
@@ -1027,6 +1034,9 @@ export class Annotator extends React.Component<Props, State>{
                     </Button>
                     <Button onClick={this.onUpload} style={{ marginRight: 8 }} disabled={this.props.imageUrl.length === 0}>
                         Upload
+                    </Button>
+                    <Button onClick={this.onReload} style={{ marginRight: 8 }}>
+                        换一张
                     </Button>
                     {sceneTypeSelect}
                 </React.Fragment>

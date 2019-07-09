@@ -64,5 +64,5 @@ ReactDOM.render(
   <Component />,
   document.body
 );
-
+//@ts-ignore
 module.hot.accept();
