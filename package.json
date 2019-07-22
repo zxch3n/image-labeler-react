@@ -1,6 +1,6 @@
 {
-  "name": "image-labeler-react",
-  "version": "1.2.3",
+  "name": "web-labeler-react",
+  "version": "1.0.3",
   "description": "Image labeler React component. It is used to label image data for object detection task.",
   "main": "dist/Annotator.js",
   "scripts": {
@@ -60,11 +60,14 @@
     "babel-plugin-import": "^1.12.0",
     "babel-preset-env": "^1.7.0"
   },
-  "author": "Rem",
+  "author": "scuShaker",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rem2016/image-labeler-react.git"
+    "url": "git+https://github.com/scuShaker/image-labeler-react.git"
   },
-  "homepage": "https://github.com/rem2016/image-labeler-react"
+  "homepage": "https://github.com/scuShaker/image-labeler-react.git",
+  "bugs": {
+    "url": "https://github.com/scuShaker/image-labeler-react/issues"
+  }
 }
