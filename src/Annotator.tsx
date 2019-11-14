@@ -4,6 +4,7 @@ import 'antd/lib/button/style/css';
 import 'antd/lib/form/style/css';
 import 'antd/lib/select/style/css';
 import bg from './res/bg.png';
+import { Transform } from 'stream';
 
 const { Option } = Select;
 
@@ -42,7 +43,8 @@ interface State {
     y: number,
     sceneType: string,
     hoverEdge?: string,
-    isMovingBox: boolean
+    isMovingBox: boolean,
+    ifTransform: string;
 }
 
 interface BoundingBox {
@@ -207,6 +209,7 @@ export class Annotator extends React.Component<Props, State>{
             y: 0,
             hoverEdge: undefined,
             isMovingBox: false,
+            ifTransform: "",
         };
         this.chosenBox = undefined;
         this.annotatingBox = undefined;
@@ -258,7 +261,6 @@ export class Annotator extends React.Component<Props, State>{
         } else {
             throw new Error("Cannot get render context2D");
         }
-
         this.setEventListeners();
         requestAnimationFrame(this.draw);
         this.initCanvas(this.props.imageUrl);
@@ -422,7 +424,6 @@ export class Annotator extends React.Component<Props, State>{
                 e.stopPropagation();
             } else if (e.key === '`' || e.keyCode == 192 || e.which == 192){
                 this.switchMode();
-                return false;
             } else if (e.key === 'Q' || e.key === 'q' || e.keyCode == 81 || e.which == 81){
                 this.onDelete();
                 this.setState({isAnnotating: true});
@@ -817,7 +818,6 @@ export class Annotator extends React.Component<Props, State>{
         if (this.canvas == null || this.ctx == null) {
             throw new Error("Canvas does not exist!");
         }
-
         const margin = 8;
         // this.ctx.clearRect(0, 0, this.props.width, this.props.height);
         this.ctx.drawImage(this.bg, 0, 0, Math.min(this.props.width, 600), Math.min(this.props.height, 600),
@@ -831,8 +831,7 @@ export class Annotator extends React.Component<Props, State>{
             0,
             this.image.width,
             this.image.height
-        );
-
+        );   
         if (this.annotatingBox !== undefined) {
             this.ctx.save();
             this.ctx.fillStyle = "#f00";
@@ -939,14 +938,11 @@ export class Annotator extends React.Component<Props, State>{
         return data;
     };
 
-    onReload = ()=> {
-        location.reload();
-    }
-
     onUpload = () => {
         if (this.props.asyncUpload == null) {
             return;
         }
+        
         if(confirm("确定要提交吗")==false)
             return;
 
@@ -969,6 +965,14 @@ export class Annotator extends React.Component<Props, State>{
             });
     };
 
+    onTransform = ()=>{
+        if(this.state.ifTransform===""){
+            this.setState({ifTransform:'rotate(180deg)'});
+        }
+        else{
+            this.setState({ifTransform:''});
+        }
+    }
 
     onDelete = () => {
         const chosen = this.chosenBox;
@@ -1035,8 +1039,8 @@ export class Annotator extends React.Component<Props, State>{
                     <Button onClick={this.onUpload} style={{ marginRight: 8 }} disabled={this.props.imageUrl.length === 0}>
                         Upload
                     </Button>
-                    <Button onClick={this.onReload} style={{ marginRight: 8 }}>
-                        换一张
+                    <Button onClick={this.onTransform} style={{ marginRight: 8 }} disabled={this.props.imageUrl.length === 0}>
+                        倒置图像
                     </Button>
                     {sceneTypeSelect}
                 </React.Fragment>
@@ -1062,7 +1066,8 @@ export class Annotator extends React.Component<Props, State>{
                             top: 0,
                             zIndex: 0,
                             cursor: cursor,
-                            borderRadius: 5
+                            borderRadius: 5,
+                            transform: this.state.ifTransform
                         }}
                         ref={this.imageCanvas}
                         width={width}
