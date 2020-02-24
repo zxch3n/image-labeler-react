@@ -1,6 +1,7 @@
 import React, {useState} from "react";
 import ReactDOM from "react-dom";
 import { Annotator } from './Annotator';
+import { message } from "antd";
 
 
 const Component: React.FC = (props) => {
@@ -55,6 +56,10 @@ const Component: React.FC = (props) => {
           annotation: 'A'
         }]}
         disableAnnotation={false}
+        returnLabel={(label)=>{message.success(label.y)}}
+        labelTypes={["A","B"]}
+        priorNaturalX={21.333333333333}
+        priorY={400}
       />
     </div>
   )

@@ -1,12 +1,22 @@
 import * as React from 'react';
-import { Button, Form, Select} from 'antd';
+import { Button, Form, Select, Modal, InputNumber, message} from 'antd';
 import 'antd/lib/button/style/css';
 import 'antd/lib/form/style/css';
 import 'antd/lib/select/style/css';
 import bg from './res/bg.png';
 import { Transform } from 'stream';
+import { runInThisContext } from 'vm';
 
 const { Option } = Select;
+const imageNaturalSize = 50;
+
+interface Label{
+    type: string;
+    distance: number;
+    naturalX: number;//这里对应实际生活中的尺度
+    y: number;
+}
+
 
 
 interface Props {
@@ -18,11 +28,16 @@ interface Props {
     disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
     defaultSceneType?: string, // default sceneType, can be empty
-    defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
+    defaultBoxes?: Array<BoundingBox|PolygonBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true
     sceneTypes?: Array<string>,
     className?: string,
-    style?: any
+    style?: any,
+    labelTypes: Array<string>,
+    returnLabel?: (label:Label)=>void,
+    priorNaturalX?: number,
+    priorY?: number,
+    isLabelLeft?:boolean
 }
 
 interface D2 {
@@ -44,7 +59,15 @@ interface State {
     sceneType: string,
     hoverEdge?: string,
     isMovingBox: boolean,
-    ifTransform: string;
+    isTransform: boolean,
+    annotateType: number,
+    modalVisible: boolean,
+    labelType: string,
+    labelDist: number,
+    labelX: number,
+    labelY: number,
+    polygonStart: boolean,
+    hoverPoint: number,
 }
 
 interface BoundingBox {
@@ -55,28 +78,50 @@ interface BoundingBox {
     annotation: string,
 }
 
+interface PolygonBox{
+    points:Array<D2>,
+    annotation: string,
+}
 
 const MARGIN = 16;
 const BOX_MIN_LENGTH = 16;
-class Box {
-    public x: number;
-    public y: number;
-    public w: number;
-    public h: number;
+const radius = 5
+class Box{
+    public type:string;
     public hover: boolean;
     public chosen: boolean;
     public lock: boolean;
     public annotation: string;
-
-    constructor(x: number, y: number, w: number, h: number) {
-        this.x = x;
-        this.y = y;
-        this.w = w;
-        this.h = h;
+    constructor(type:string) {
+        this.type = type;
         this.hover = false;
         this.chosen = false;
         this.lock = false;
         this.annotation = ''
+    }
+    insideBox(x: number, y: number){
+        return false;
+    }
+    insideInnerBox(x: number, y: number)
+    {
+        return false;
+    }
+    getData(){
+
+    }
+}
+class RecBox extends Box{
+    public x: number;
+    public y: number;
+    public w: number;
+    public h: number;
+
+    constructor(x: number, y: number, w: number, h: number) {
+        super("rectangle");
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
     }
 
     insideBox(x: number, y: number) {
@@ -120,7 +165,7 @@ class Box {
     }
 
     static fromBoundingBox(data: BoundingBox){
-        const box = new Box(data.x, data.y, data.w, data.h);
+        const box = new RecBox(data.x, data.y, data.w, data.h);
         box.annotation = data.annotation;
         return box;
     }
@@ -160,6 +205,156 @@ class Box {
                 break;
         }
     }
+
+    // TODO move draw here
+
+    // TODO add special visual effect for lock element
+}
+
+
+class PolBox extends Box{
+    public points: Array<D2>;
+
+    constructor(points:Array<D2>) {
+        super("polygon");
+        this.points = points;
+        this.hover = false;
+        this.chosen = false;
+        this.lock = false;
+        this.annotation = '';
+    }
+    insertPoint(point:D2){
+        this.points.push(point);
+    }
+    getLength(){
+        return this.points.length;
+    }
+    getBounding(){
+        var left = 10000,top=10000,buttom=0,right=0;
+        for(let i=0;i<this.points.length;i++)
+        {
+            if(this.points[i].x<left)
+                left = this.points[i].x;
+            if(this.points[i].x>right)
+                right = this.points[i].x;
+            if(this.points[i].y<top)
+                top = this.points[i].y;
+            if(this.points[i].y>buttom)
+                buttom = this.points[i].y;
+        }
+        return {left,right,top,buttom};
+    }
+    insideBox(x: number, y: number) {
+        var crossMul=function(v1:D2,v2:D2){
+            return   v1.x*v2.y-v1.y*v2.x;
+        }
+        //javascript判断两条线段是否相交  
+        var checkCross=function(p1:D2,p2:D2,p3:D2,p4:D2){
+            var v1={x:p1.x-p3.x,y:p1.y-p3.y};      
+            var v2={x:p2.x-p3.x,y:p2.y-p3.y};      
+            var v3={x:p4.x-p3.x,y:p4.y-p3.y};   
+            var v=crossMul(v1,v3)*crossMul(v2,v3);   
+            v1={x:p3.x-p1.x,y:p3.y-p1.y}; 
+            v2={x:p4.x-p1.x,y:p4.y-p1.y};
+            v3={x:p2.x-p1.x,y:p2.y-p1.y};
+            return (v<=0&&crossMul(v1,v3)*crossMul(v2,v3)<=0)?true:false;
+        }
+        //判断点是否在多边形内  
+        var p1,p2,p3,p4;
+        var polygon = this.points;
+        var point={x:x,y:y};   
+        p1 = point;   
+        p2={x:-100,y:point.y};
+        var count=0;
+        //对每条边都和射线作对比   
+        for(var i=0;i<polygon.length-1;i++){
+            p3=polygon[i];
+            p4=polygon[i+1];
+            if(checkCross(p1,p2,p3,p4)==true){                
+                count++;
+            }    
+        }      
+        p3=polygon[polygon.length-1];
+        p4=polygon[0];       
+        if(checkCross(p1,p2,p3,p4)==true){
+            count++;
+        }
+        return (count%2==0)?false:true;
+    }
+
+    insideInnerBox(x: number, y: number) {
+        var crossMul=function(v1:D2,v2:D2){
+            return   v1.x*v2.y-v1.y*v2.x;
+        }
+        //javascript判断两条线段是否相交  
+        var checkCross=function(p1:D2,p2:D2,p3:D2,p4:D2){
+            var v1={x:p1.x-p3.x,y:p1.y-p3.y};      
+            var v2={x:p2.x-p3.x,y:p2.y-p3.y};      
+            var v3={x:p4.x-p3.x,y:p4.y-p3.y};   
+            var v=crossMul(v1,v3)*crossMul(v2,v3);   
+            v1={x:p3.x-p1.x,y:p3.y-p1.y}; 
+            v2={x:p4.x-p1.x,y:p4.y-p1.y};
+            v3={x:p2.x-p1.x,y:p2.y-p1.y};
+            return (v<=0&&crossMul(v1,v3)*crossMul(v2,v3)<=0)?true:false;
+        }
+        //判断点是否在多边形内  
+        var p1,p2,p3,p4;
+        var polygon = this.points;
+        var point={x:x,y:y};   
+        p1 = point;   
+        p2={x:-100,y:point.y};
+        var count=0;
+        //对每条边都和射线作对比   
+        for(var i=0;i<polygon.length-1;i++){
+            p3=polygon[i];
+            p4=polygon[i+1];
+            if(checkCross(p1,p2,p3,p4)==true){                
+                count++;
+            }    
+        }      
+        p3=polygon[polygon.length-1];
+        p4=polygon[0];       
+        if(checkCross(p1,p2,p3,p4)==true){
+            count++;
+        }
+        return (count%2==0)?false:true;
+    }
+    getPointCursorIsOn(x: number, y: number) {
+        let min = MARGIN;
+        var index;
+        var index_rt = -1;
+        for (index=0;index<this.points.length;index++) {
+            if (Math.sqrt(Math.pow(x - this.points[index].x, 2) + Math.pow(y - this.points[index].y, 2))< radius+5) {
+                index_rt = index;
+                break;
+            }
+        }
+        return index_rt;
+    }
+
+    getData() {
+        const {points, annotation} = this;
+        return {points, annotation } as PolygonBox;
+    }
+
+    static fromBoundingBox(data: PolygonBox){
+        const box = new PolBox(data.points);
+        box.annotation = data.annotation;
+        return box;
+    }
+
+
+    movePointByDrag (index:number, xMovement: number, yMovement: number) {
+        this.points[index].x += xMovement;
+        this.points[index].y += yMovement;
+    }
+    moveBoxByDrag (xMovement: number, yMovement: number) {
+        for(let i=0;i<this.points.length;i++){
+            this.points[i].x += xMovement;
+            this.points[i].y += yMovement;
+        }
+    }
+
 
     // TODO move draw here
 
@@ -209,7 +404,15 @@ export class Annotator extends React.Component<Props, State>{
             y: 0,
             hoverEdge: undefined,
             isMovingBox: false,
-            ifTransform: "",
+            isTransform: false,
+            annotateType: 1,
+            modalVisible: false,
+            labelType: "A",
+            labelDist: 0,
+            labelX: 0,
+            labelY: 0,
+            polygonStart:false,
+            hoverPoint:-1,
         };
         this.chosenBox = undefined;
         this.annotatingBox = undefined;
@@ -228,10 +431,12 @@ export class Annotator extends React.Component<Props, State>{
             this.nextDefaultType = undefined;
             this.initCanvas(nextProps.imageUrl);
             if (nextProps.defaultBoxes){
-                this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox) => {
-                    return Box.fromBoundingBox(bbox);
+                this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox|PolygonBox) => {
+                    if(bbox.hasOwnProperty("x"))
+                        return RecBox.fromBoundingBox(bbox as BoundingBox);
+                    else
+                        return PolBox.fromBoundingBox(bbox as PolygonBox);
                 });
-
                 if (this.boxes.length !== 0){
                     this.chooseBox(this.boxes[0]);
                 }
@@ -265,8 +470,11 @@ export class Annotator extends React.Component<Props, State>{
         requestAnimationFrame(this.draw);
         this.initCanvas(this.props.imageUrl);
         if (this.props.defaultBoxes){
-            this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => {
-                return Box.fromBoundingBox(bbox);
+            this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox|PolygonBox) => {
+                if(bbox.hasOwnProperty("x"))
+                    return RecBox.fromBoundingBox(bbox as BoundingBox);
+                else
+                    return PolBox.fromBoundingBox(bbox as PolygonBox);
             });
 
             if (this.boxes.length !== 0){
@@ -286,7 +494,6 @@ export class Annotator extends React.Component<Props, State>{
             if (this.ctx) {
                 this.draw();
             }
-
             // when image is loaded boxes position may shift, we need to re-locate the annotation position
             if (this.chosenBox){
                 this.chooseBox(this.chosenBox);
@@ -362,16 +569,32 @@ export class Annotator extends React.Component<Props, State>{
             let { x, y } = this.invertTransform(relativeX, relativeY);
 
             // Move box should have the highest priority
-            if (this.chosenBox && this.dragX && this.dragY && this.chosenBox.insideInnerBox(x, y)) {
-                this.chosenBox.moveBoxByDrag(x - this.dragX, y - this.dragY);
-                this.dragX = x; this.dragY = y;
-                return;
-            }
-
             if (this.chosenBox && this.dragX && this.dragY) {
-                this.chosenBox.resizeByDrag(this.chosenBox.getEdgeCursorIsOn(x, y), x - this.dragX, y - this.dragY);
-                this.dragX = x; this.dragY = y;
-                return;
+                if(this.chosenBox.type=="rectangle"){
+                    if((this.chosenBox as RecBox).insideInnerBox(x, y)){
+                        (this.chosenBox as RecBox).moveBoxByDrag(x - this.dragX, y - this.dragY);
+                        this.dragX = x; this.dragY = y;
+                        return;
+                    }
+                    if (this.chosenBox && this.dragX && this.dragY) {
+                        (this.chosenBox as RecBox).resizeByDrag((this.chosenBox as RecBox).getEdgeCursorIsOn(x, y), x - this.dragX, y - this.dragY);
+                        this.dragX = x; this.dragY = y;
+                        return;
+                    }
+                }
+                if(this.chosenBox.type=="polygon"){
+                    // move the point
+                    var point_index = (this.chosenBox as PolBox).getPointCursorIsOn(x,y)
+                    if(point_index == -1)
+                    {
+                        return;
+                    }
+                    else{
+                        (this.chosenBox as PolBox).movePointByDrag(point_index,x - this.dragX, y - this.dragY);
+                        this.dragX = x; this.dragY = y;
+                        return;
+                    }
+                }
             }
 
             if (e.targetTouches.length == 2) { //pinch
@@ -429,38 +652,71 @@ export class Annotator extends React.Component<Props, State>{
                 this.setState({isAnnotating: true});
             }
         });
-
+        var tmp =1;
         this.registerEvent(this.canvas, 'mousedown', (e: MouseEvent) => {
             [this.startX, this.startY] = this.getOriginalXY(e.clientX, e.clientY);
             this.dragX = this.startX; this.dragY = this.startY;
             this.setState({ mouse_down: true });
             this.lastX = null;
             this.lastY = null;
+            if(this.state.isAnnotating&&this.state.annotateType == 3){
+                if(!this.annotatingBox&&!this.state.polygonStart){
+                    this.annotatingBox = new PolBox([]);
+                    (this.annotatingBox as PolBox).insertPoint({x:this.dragX,y:this.dragY})
+                    this.setState({polygonStart:true});
+                    if (this.nextDefaultType) {
+                        this.annotatingBox.annotation = this.nextDefaultType;
+                    } else if (this.props.defaultType) {
+                        this.annotatingBox.annotation = this.props.defaultType;
+                    } else {
+                        this.annotatingBox.annotation = this.props.types[0];
+                    }
+                }
+                else if(this.annotatingBox&&this.state.polygonStart&&this.annotatingBox.type=="polygon")
+                {
+                    if((this.annotatingBox as PolBox).getPointCursorIsOn(this.startX,this.startY)==0){
+                        this.chooseBox(this.annotatingBox);
+                        this.boxes.push(this.annotatingBox);
+                        this.annotatingBox = undefined;
+                        this.setState({polygonStart:false});
+                    }else{
+                        (this.annotatingBox as PolBox).insertPoint({x:this.dragX,y:this.dragY})
+                    }
+                }
+            }
         });
 
         // Uesr may mouse up outside of the canvas
         this.registerEvent(this.canvas, 'mouseup', (e: MouseEvent) => {
             // TODO: merge this and touch callback
+            if(e.button==2&&this.annotatingBox !== undefined&&this.state.polygonStart){
+                this.annotatingBox = undefined;
+                this.setState({polygonStart:false});
+            }
             if (this.moveSmallDistance(e.clientX, e.clientY)) {
                 // User click
                 this.searchChosenBox();
             } 
-
             // Box may be resized by dragging
             this.refreshBoxTipPosition();
         });
 
         this.registerEvent(window, 'mouseup', ()=>{
             // This apply to scenario when mouseup outside of the canvas
-            if (this.annotatingBox !== undefined) {
-                // User create new box
-                this.chooseBox(this.annotatingBox);
-                this.boxes.push(this.annotatingBox);
-                this.annotatingBox = undefined;
-            } else if (this.chosenBox && !this.state.isAnnotating){
-                this.refreshBoxTipPosition();
+            if (this.annotatingBox !== undefined){
+                if(this.annotatingBox.type == "rectangle"){
+                    // User create new box
+                    if(this.state.annotateType==2){
+                        this.setState({modalVisible:true,labelX:(this.annotatingBox as RecBox).x,labelY:(this.annotatingBox as RecBox).y});
+                    }
+                    this.chooseBox(this.annotatingBox);
+                    this.boxes.push(this.annotatingBox);
+                    this.annotatingBox = undefined;
+                }
+                else if (this.chosenBox && !this.state.isAnnotating){
+                    this.refreshBoxTipPosition();
+                }
             }
-
             this.setState({ mouse_down: false });
             this.startX = undefined;
             this.startY = undefined;
@@ -501,23 +757,32 @@ export class Annotator extends React.Component<Props, State>{
 
 
         // Move box should have the highest priority
-        if (this.state.isMovingBox && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
-            this.chosenBox.moveBoxByDrag(x - this.dragX, y - this.dragY);
+        if (this.state.isMovingBox && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY&&this.chosenBox.type=="rectangle") {
+            (this.chosenBox as RecBox).moveBoxByDrag(x - this.dragX, y - this.dragY);
             this.dragX = x; this.dragY = y;
             return;
         }
 
-        if (this.state.hoverEdge && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY) {
-            this.chosenBox.resizeByDrag(this.state.hoverEdge, x - this.dragX, y - this.dragY);
+        if (this.state.hoverEdge && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY&&this.chosenBox.type=="rectangle") {
+            (this.chosenBox as RecBox).resizeByDrag(this.state.hoverEdge, x - this.dragX, y - this.dragY);
             this.dragX = x; this.dragY = y;
             return;
         }
-
+        //TODO
+        if (this.state.hoverPoint != -1 && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY&&this.chosenBox.type=="polygon") {
+            (this.chosenBox as PolBox).movePointByDrag(this.state.hoverPoint, x - this.dragX, y - this.dragY);
+            this.dragX = x; this.dragY = y;
+            return;
+        }
+        if (this.state.isMovingBox && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY&&this.chosenBox.type=="polygon") {
+            (this.chosenBox as PolBox).moveBoxByDrag(x - this.dragX, y - this.dragY);
+            this.dragX = x; this.dragY = y;
+            return;
+        }
         if (e.target == this.canvas && this.state.mouse_down) {
             this.doMove(relativeX, relativeY);
             return;
         }
-
         if (!this.state.mouse_down) {
             this.mouseHoverCheck(e.clientX, e.clientY);
         }
@@ -551,30 +816,54 @@ export class Annotator extends React.Component<Props, State>{
                 box.chosen = false;
             }
 
-            this.setState({hoverEdge: undefined, isMovingBox: false});
+            this.setState({hoverEdge: undefined, isMovingBox: false, hoverPoint:-1});
             box.chosen = true;
         }
-
-        const { x, y, h } = this.getCurrentCoordinate(box);
-        const { height } = this.props;
-        this.chosenBox = box;
-        let newY = y + h;
-        if (newY + 100 > height) {
-            // Annotation reaches the bottom
-            newY = y - 110;
-        }
-
-        this.setState({
-            annotation: box.annotation,
-            x: x,
-            y: newY,
-            lock: box.lock
-        });
-        if (showAnnotation && !this.state.showAnnotation) {
+        if(box.type == "rectangle"){
+            const { x, y, h } = this.getCurrentCoordinate((box as RecBox).x,(box as RecBox).y,(box as RecBox).w,(box as RecBox).h);
+            const { height } = this.props;
+            this.chosenBox = box;
+            let newY = y + h;
+            if (newY + 100 > height) {
+                // Annotation reaches the bottom
+                newY = y - 110;
+            }
+    
             this.setState({
-                showAnnotation: true
+                annotation: box.annotation,
+                x: x,
+                y: newY,
+                lock: box.lock
             });
+            if (showAnnotation && !this.state.showAnnotation) {
+                this.setState({
+                    showAnnotation: true
+                });
+            }
+        } 
+        else{
+            const {left,right,top,buttom} = (box as PolBox).getBounding();
+            const { x, y, h } = this.getCurrentCoordinate(left,top,right-left,buttom-top);
+            const { height } = this.props;
+            this.chosenBox = box;
+            let newY = y + h;
+            if (newY + 100 > height) {
+                // Annotation reaches the bottom
+                newY = y - 110;
+            }
+            this.setState({
+                annotation: box.annotation,
+                x: x,
+                y: newY,
+                lock: box.lock
+            });
+            if (showAnnotation && !this.state.showAnnotation) {
+                this.setState({
+                    showAnnotation: true
+                });
+            }
         }
+        //TODO
     };
 
     refreshBoxTipPosition = () => {
@@ -594,16 +883,17 @@ export class Annotator extends React.Component<Props, State>{
             showAnnotation: false,
             annotation: '',
             hoverEdge: undefined,
-            isMovingBox: false
+            isMovingBox: false,
+            hoverPoint: -1,
         });
     };
 
-    getCurrentCoordinate(box: Box) {
+    getCurrentCoordinate(ax:number,ay:number,aw:number,ah:number) {
         return {
-            x: box.x * this.scale.x + this.position.x,
-            y: box.y * this.scale.y + this.position.y,
-            w: box.w * this.scale.x,
-            h: box.h * this.scale.y,
+            x: ax * this.scale.x + this.position.x,
+            y: ay * this.scale.y + this.position.y,
+            w: aw * this.scale.x,
+            h: ah * this.scale.y,
         }
     }
 
@@ -629,12 +919,20 @@ export class Annotator extends React.Component<Props, State>{
 
         let edge = undefined;
         let isMovingBox = false;
+        let point_index = -1;
         if (this.chosenBox && this.chosenBox.hover) {
-            edge = this.chosenBox.getEdgeCursorIsOn(x, y);
-            isMovingBox = this.chosenBox.insideInnerBox(x, y);
+            if(this.chosenBox.type=="rectangle")
+            {
+                edge = (this.chosenBox as RecBox).getEdgeCursorIsOn(x, y);
+                isMovingBox = this.chosenBox.insideInnerBox(x, y);
+            }
+            else{
+                point_index = (this.chosenBox as PolBox).getPointCursorIsOn(x, y);
+                isMovingBox = this.chosenBox.insideInnerBox(x, y);
+            }
         }
 
-        this.setState({ hover: anyHover, hoverEdge: edge, isMovingBox});
+        this.setState({ hover: anyHover, hoverEdge: edge, isMovingBox,hoverPoint:point_index});
     }
 
     invertTransform(x: number, y: number) {
@@ -748,9 +1046,12 @@ export class Annotator extends React.Component<Props, State>{
     };
 
     doMove = (relativeX: number, relativeY: number) => {
-        if (this.state.isAnnotating) {
-            this.annotateMove(relativeX, relativeY);
-        } else {
+        if(this.state.isAnnotating){
+            if(this.state.annotateType==2)
+                this.labelMove(relativeX, relativeY);
+            else if(this.state.annotateType==1)
+                this.annotateMove(relativeX, relativeY);
+        } else{
             this.dragMove(relativeX, relativeY);
         }
     };
@@ -761,7 +1062,7 @@ export class Annotator extends React.Component<Props, State>{
         }
 
         let { x, y } = this.invertTransform(relativeX, relativeY);
-        this.annotatingBox = new Box(
+        this.annotatingBox = new RecBox(
             Math.min(this.startX, x),
             Math.min(this.startY, y),
             Math.abs(x - this.startX),
@@ -775,6 +1076,20 @@ export class Annotator extends React.Component<Props, State>{
         } else {
             this.annotatingBox.annotation = this.props.types[0];
         }
+    };
+    labelMove = (relativeX: number, relativeY: number) => {
+        if (this.startX === undefined || this.startY === undefined) {
+            throw new Error("startX | startY undefined")
+        }
+
+        let { x, y } = this.invertTransform(relativeX, relativeY);
+        this.annotatingBox = new RecBox(
+            Math.min(this.startX, x),
+            Math.min(this.startY, y),
+            Math.abs(x - this.startX),
+            Math.abs(y - this.startY)
+        );
+        this.annotatingBox.annotation = "label";
     };
 
     dragMove = (relativeX: number, relativeY: number) => {
@@ -831,16 +1146,48 @@ export class Annotator extends React.Component<Props, State>{
             0,
             this.image.width,
             this.image.height
-        );   
+        ); 
+        if(this.props.priorNaturalX&&this.props.priorY&&this.props.priorNaturalX!=0&&this.props.priorY!=0&&this.ctx){
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.lineWidth = 5 / this.scale.x;
+            let ctx_X = this.props.priorNaturalX / imageNaturalSize * this.image.naturalWidth;
+            let ctx_Y = this.props.priorY;
+            this.ctx.strokeRect(ctx_X,ctx_Y,100,100)
+        }
         if (this.annotatingBox !== undefined) {
-            this.ctx.save();
-            this.ctx.fillStyle = "#f00";
-            this.ctx.strokeStyle = '#333';
-            this.ctx.strokeRect(this.annotatingBox.x, this.annotatingBox.y, this.annotatingBox.w, this.annotatingBox.h);
-            this.ctx.fillStyle = 'rgba(250, 50, 50, 0.3)';
-            this.ctx.fillRect(this.annotatingBox.x, this.annotatingBox.y, this.annotatingBox.w, this.annotatingBox.h);
-            this.ctx.restore();
-            this.ctx.globalAlpha = 0.3;
+            if(this.annotatingBox.type=="rectangle")
+            {
+                this.ctx.save();
+                this.ctx.fillStyle = "#f00";
+                this.ctx.strokeStyle = '#333';
+                this.ctx.strokeRect((this.annotatingBox as RecBox).x, (this.annotatingBox as RecBox).y, (this.annotatingBox as RecBox).w, (this.annotatingBox as RecBox).h);
+                this.ctx.fillStyle = 'rgba(250, 50, 50, 0.3)';
+                this.ctx.fillRect((this.annotatingBox as RecBox).x, (this.annotatingBox as RecBox).y, (this.annotatingBox as RecBox).w, (this.annotatingBox as RecBox).h);
+                this.ctx.restore();
+                this.ctx.globalAlpha = 0.3;
+            }
+            else if(this.annotatingBox.type == "polygon"){
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 2
+               // this.ctx.beginPath();
+                let length = (this.annotatingBox as PolBox).getLength()
+                for(let i = 0;i<length;i++){
+                    this.ctx.beginPath();
+                    this.ctx.globalAlpha = 0.85;
+                    this.ctx.arc((this.annotatingBox as PolBox).points[i].x, (this.annotatingBox as PolBox).points[i].y, radius, 0, Math.PI*2);
+                    this.ctx.fillStyle = i?"blue":"red";
+                    this.ctx.strokeStyle = "black";
+                    this.ctx.fill();
+                    this.ctx.stroke();
+                }
+                this.ctx.beginPath();
+                if(length !==0)
+                    this.ctx.moveTo((this.annotatingBox as PolBox).points[0].x,(this.annotatingBox as PolBox).points[0].y);
+                for(let i = 0;i<length;i++){
+                        this.ctx.lineTo((this.annotatingBox as PolBox).points[i].x,(this.annotatingBox as PolBox).points[i].y);
+                }
+                this.ctx.stroke();
+            }
         }
 
         this.ctx.fillStyle = "#f00";
@@ -849,53 +1196,155 @@ export class Annotator extends React.Component<Props, State>{
             const fontSize = 30 / this.scale.x;
             if (box.chosen) {
                 if (box.hover){
-                    this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-                    this.ctx.lineWidth = 2 / this.scale.x;
-                    this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+                    if(box.type=="rectangle"){
+                        this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                        this.ctx.lineWidth = 2 / this.scale.x;
+                        this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
+                    }
+                    else{
+                        this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                        this.ctx.lineWidth = 2
+                        let length = (box as PolBox).getLength()
+                        for(let i = 0;i<length;i++){
+                            this.ctx.beginPath();
+                            this.ctx.globalAlpha = 0.85;
+                            this.ctx.arc((box as PolBox).points[i].x, (box as PolBox).points[i].y, radius, 0, Math.PI*2);
+                            this.ctx.fillStyle = "blue";
+                            this.ctx.strokeStyle = "black";
+                            this.ctx.fill();
+                            this.ctx.stroke();
+                        }
+                        this.ctx.beginPath();
+                        if(length !==0)
+                            this.ctx.moveTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                        for(let i = 0;i<length;i++){
+                                this.ctx.lineTo((box as PolBox).points[i].x,(box as PolBox).points[i].y);
+                        }
+                        if(length !==0)
+                            this.ctx.lineTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                        this.ctx.stroke();
+                        // text
+                        this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.font = fontSize + 'px Ubuntu';
+                        this.ctx.fillText(box.annotation, (box as RecBox).x + (box as RecBox).w / 2, (box as RecBox).y + (box as RecBox).h / 2 + fontSize / 2);
+                    }
                 } else {
+                    if(box.type=="rectangle"){
+                        this.ctx.lineWidth = 5;
+                        this.ctx.strokeStyle = '#555';
+                        this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
+        
+                        this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
+                        this.ctx.fillRect((box as RecBox).x, (box as RecBox).y, ((box as RecBox) as RecBox).w, (box as RecBox).h);
+                        // text
+                        this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.font = fontSize + 'px Ubuntu';
+                        this.ctx.fillText(box.annotation, (box as RecBox).x + (box as RecBox).w / 2, (box as RecBox).y + (box as RecBox).h / 2 + fontSize / 2);
+                    }
+                    else{
+                        this.ctx.strokeStyle = '#555';
+                        let length = (box as PolBox).getLength()
+                        for(let i = 0;i<length;i++){
+                            this.ctx.beginPath();
+                            this.ctx.globalAlpha = 0.85;
+                            this.ctx.arc((box as PolBox).points[i].x, (box as PolBox).points[i].y, radius, 0, Math.PI*2);
+                            this.ctx.fillStyle = "blue";
+                            this.ctx.strokeStyle = "black";
+                            this.ctx.fill();
+                            this.ctx.stroke();
+                        }
+                        this.ctx.beginPath();
+                        if(length !==0)
+                            this.ctx.moveTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                        for(let i = 0;i<length;i++){
+                                this.ctx.lineTo((box as PolBox).points[i].x,(box as PolBox).points[i].y);
+                        }
+                        if(length !==0)
+                            this.ctx.lineTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                        this.ctx.stroke();
+                        // text
+                        this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.font = fontSize + 'px Ubuntu';
+                        let {left,right,top,buttom} = (box as PolBox).getBounding();
+                        this.ctx.fillText(box.annotation, (left + right)/ 2, (top +  buttom + fontSize)/ 2);
+                    }
+                }
+            } else if (box.hover) {
+                if(box.type=="rectangle"){
                     this.ctx.lineWidth = 5;
                     this.ctx.strokeStyle = '#555';
-                    this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+                    this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
 
-                    this.ctx.fillStyle = 'rgba(255, 100, 145, 0.45)';
-                    this.ctx.fillRect(box.x, box.y, box.w, box.h);
-                    this.ctx.strokeStyle = 'rgba(255, 100, 100, 1)';
-                    this.ctx.lineWidth = 10 / this.scale.x;
-                    this.ctx.strokeRect(box.x, box.y, box.w, box.h);
-                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-                    this.ctx.lineWidth = 4 / this.scale.x;
-                    this.ctx.strokeRect(box.x + margin, box.y + margin, box.w - margin * 2, box.h - margin * 2)
+                    this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
+                    this.ctx.fillRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
                     // text
                     this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
                     this.ctx.textAlign = 'center';
                     this.ctx.font = fontSize + 'px Ubuntu';
-                    this.ctx.fillText(box.annotation, box.x + box.w / 2, box.y + box.h / 2 + fontSize / 2);
+                    this.ctx.fillText(box.annotation, (box as RecBox).x + (box as RecBox).w / 2, (box as RecBox).y + (box as RecBox).h / 2 + fontSize / 2);
                 }
-            } else if (box.hover) {
-                this.ctx.lineWidth = 5;
-                this.ctx.strokeStyle = '#555';
-                this.ctx.strokeRect(box.x, box.y, box.w, box.h);
-
-                this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
-                this.ctx.fillRect(box.x, box.y, box.w, box.h);
-                // text
-                this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
-                this.ctx.textAlign = 'center';
-                this.ctx.font = fontSize + 'px Ubuntu';
-                this.ctx.fillText(box.annotation, box.x + box.w / 2, box.y + box.h / 2 + fontSize / 2);
+                else{
+                    this.ctx.lineWidth = 5;
+                    this.ctx.strokeStyle = '#555';
+                    let length = (box as PolBox).getLength()
+                    this.ctx.beginPath();
+                    if(length != 0){
+                        this.ctx.moveTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                    }
+                    for(let i = 1;i<length;i++){
+                        this.ctx.lineTo((box as PolBox).points[i].x,(box as PolBox).points[i].y);
+                    }
+                    if(length!=0)
+                        this.ctx.lineTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                    this.ctx.stroke();
+                    this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
+                    this.ctx.fill();
+                    // text
+                    this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.font = fontSize + 'px Ubuntu';
+                    let {left,right,top,buttom} = (box as PolBox).getBounding();
+                    this.ctx.fillText(box.annotation, (left + right)/ 2, (top +  buttom + fontSize)/ 2);
+                }
             } else {
-                this.ctx.lineWidth = 5;
-                this.ctx.strokeStyle = '#555';
-                this.ctx.strokeRect(box.x, box.y, box.w, box.h);
+                if(box.type=="rectangle"){
+                    this.ctx.lineWidth = 5;
+                    this.ctx.strokeStyle = '#555';
+                    this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
 
-                this.ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
-                this.ctx.lineWidth = 3 / this.scale.x;
-                this.ctx.strokeRect(box.x + margin, box.y + margin, box.w - margin * 2, box.h - margin * 2)
-                // text
-                this.ctx.fillStyle = 'rgba(40, 40, 40, 0.3)';
-                this.ctx.textAlign = 'center';
-                this.ctx.font = fontSize + 'px Ubuntu';
-                this.ctx.fillText(box.annotation, box.x + box.w / 2, box.y + box.h / 2 + fontSize / 2);
+                    this.ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
+                    this.ctx.lineWidth = 3 / this.scale.x;
+                    this.ctx.strokeRect((box as RecBox).x + margin, (box as RecBox).y + margin, (box as RecBox).w - margin * 2, (box as RecBox).h - margin * 2)
+                    // text
+                    this.ctx.fillStyle = 'rgba(40, 40, 40, 0.3)';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.font = fontSize + 'px Ubuntu';
+                    this.ctx.fillText(box.annotation, (box as RecBox).x + (box as RecBox).w / 2, (box as RecBox).y + (box as RecBox).h / 2 + fontSize / 2);
+                }
+                else{
+                    this.ctx.lineWidth = 5;
+                    this.ctx.strokeStyle = '#555';
+                    let length = (box as PolBox).getLength()
+                    this.ctx.beginPath();
+                    if(length != 0){
+                        this.ctx.moveTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                    }
+                    for(let i = 1;i<length;i++){
+                        this.ctx.lineTo((box as PolBox).points[i].x,(box as PolBox).points[i].y);
+                    }
+                    if(length != 0)
+                        this.ctx.lineTo((box as PolBox).points[0].x,(box as PolBox).points[0].y);
+                    this.ctx.stroke();
+                    // text
+                    this.ctx.fillStyle = 'rgba(40, 40, 40, 0.3)';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.font = fontSize + 'px Ubuntu';
+                    let {left,right,top,buttom} = (box as PolBox).getBounding();
+                    this.ctx.fillText(box.annotation, (left + right)/ 2, (top +  buttom + fontSize)/ 2);
+                 }
             }
         }
 
@@ -920,7 +1369,7 @@ export class Annotator extends React.Component<Props, State>{
         this.chosenBox = undefined;
         this.boxes = [];
         this.annotatingBox = undefined;
-        this.setState({hoverEdge: undefined, isMovingBox: false});
+        this.setState({hoverEdge: undefined, isMovingBox: false,hoverPoint:-1});
     };
 
     getPostData = () => {
@@ -966,12 +1415,7 @@ export class Annotator extends React.Component<Props, State>{
     };
 
     onTransform = ()=>{
-        if(this.state.ifTransform===""){
-            this.setState({ifTransform:'rotate(180deg)'});
-        }
-        else{
-            this.setState({ifTransform:''});
-        }
+            this.setState({isTransform:!this.state.isTransform});
     }
 
     onDelete = () => {
@@ -986,11 +1430,32 @@ export class Annotator extends React.Component<Props, State>{
         this.boxes.splice(index, 1);
     }
 
+    modalHandleOk = ()=> {
+        let label:Label = {type:this.state.labelType,distance:this.state.labelDist,
+             naturalX:this.state.labelX,y:this.state.labelY}
+        if(this.props.isLabelLeft){
+            label.naturalX = label.distance + label.naturalX/this.image.naturalWidth*imageNaturalSize
+        }
+        else{
+            label.naturalX = label.distance + imageNaturalSize - label.naturalX/this.image.naturalWidth*imageNaturalSize
+        }
+        if(this.props.returnLabel != undefined)
+            this.props.returnLabel(label)
+        this.setState({modalVisible:false})
+    }
+    modalHandleCancel = ()=> {
+        this.setState({modalVisible:false})
+    }
+
     render() {
         let { width, height, sceneTypes, showButton = true, className = "", style = {}, disableAnnotation=false} = this.props;
         let { showAnnotation, hover, mouse_down } = this.state;
         if (showAnnotation && hover && mouse_down) {
             showAnnotation = false;
+        }
+
+        if(this.state.isTransform == true){
+            disableAnnotation = true;
         }
 
         if (disableAnnotation) {
@@ -1005,7 +1470,9 @@ export class Annotator extends React.Component<Props, State>{
         const shownStyle = Object.assign({}, style);
         let cursor = this.state.hover ? 'pointer' :
             (this.state.isAnnotating ? 'crosshair' : 'grab');
-        if (this.state.isMovingBox) {
+        if(this.state.hoverPoint != -1)
+            cursor = 'e-resize'; 
+        else if (this.state.isMovingBox) {
             cursor = 'move';
         } else if (this.state.hoverEdge) {
             if (this.state.hoverEdge === 'left' || this.state.hoverEdge === 'right'){
@@ -1036,11 +1503,21 @@ export class Annotator extends React.Component<Props, State>{
                     <Button style={{ margin: 8 }} onClick={() => this.setState({ isAnnotating: !this.state.isAnnotating })} >
                         To {this.state.isAnnotating ? 'Move' : 'Annotate'}
                     </Button>
+                    <Select
+                    onChange={(type: string) => {
+                        if(type=="矩形")
+                            this.setState({annotateType:1})
+                        if(type=="贴标")
+                            this.setState({annotateType:2})
+                        if(type=="多边形")
+                            this.setState({annotateType:3})
+                    }} defaultValue={"矩形"}>
+                        <Option value={"矩形"} key={1}>{"矩形"}</Option>
+                        <Option value={"贴标"} key={2}>{"贴标"}</Option>
+                        <Option value={"多边形"} key={3}>{"多边形"}</Option>
+                    </Select>
                     <Button onClick={this.onUpload} style={{ marginRight: 8 }} disabled={this.props.imageUrl.length === 0}>
                         Upload
-                    </Button>
-                    <Button onClick={this.onTransform} style={{ marginRight: 8 }} disabled={this.props.imageUrl.length === 0}>
-                        倒置图像
                     </Button>
                     {sceneTypeSelect}
                 </React.Fragment>
@@ -1052,6 +1529,9 @@ export class Annotator extends React.Component<Props, State>{
                 className={className}
             >
                 {buttons}
+                <Button onClick={this.onTransform} style={{ marginLeft: 10 }} disabled={this.props.imageUrl.length === 0}>
+                        倒置图像
+                    </Button>
                 <div style={{
                     position: 'relative',
                     width,
@@ -1067,7 +1547,7 @@ export class Annotator extends React.Component<Props, State>{
                             zIndex: 0,
                             cursor: cursor,
                             borderRadius: 5,
-                            transform: this.state.ifTransform
+                            transform: this.state.isTransform?'rotate(180deg)':''
                         }}
                         ref={this.imageCanvas}
                         width={width}
@@ -1094,7 +1574,39 @@ export class Annotator extends React.Component<Props, State>{
                             Uploaded
                         </h1>
                     </div>
-
+                    <Modal
+                        width={300}
+                        style={{
+                            position: 'absolute',
+                            left: "40%",
+                            top: '10%',
+                            borderRadius: 4,
+                            backgroundColor: 'white',
+                            zIndex: 10
+                        }} 
+                        title="采集贴标信息"
+                        visible={this.state.modalVisible}
+                        onOk={this.modalHandleOk}
+                        onCancel={this.modalHandleCancel}>
+                        <div>
+                        <Select 
+                        defaultValue = "A"
+                        onChange={(value:string)=>{
+                            this.setState({labelType:value})
+                        }}>
+                        {this.props.labelTypes.map((type:string)=>
+                            <Option value={type}>{type}</Option>
+                        )}
+                        </Select>
+                        </div>
+                        <div>
+                        </div>
+                        <div>
+                        <InputNumber max={180} min={0} onChange={(value)=>{
+                            if(value!== undefined)
+                                this.setState({labelDist:value})}}/>
+                        </div>
+                    </Modal>
 
                     <Form
                         className="canvas-annotation"
