@@ -8,7 +8,7 @@ import { Transform } from 'stream';
 import { runInThisContext } from 'vm';
 
 const { Option } = Select;
-const imageNaturalSize = 50;
+const imageNaturalSize = 48;
 
 interface Label{
     type: string;
@@ -23,18 +23,19 @@ interface Props {
     imageUrl: string,
     height: number, // height of the labeling window
     width: number, // width of the labeling window
-    types: Array<string>, // annotation types
+    //types: Array<string>, // annotation types
     asyncUpload?: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
     disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
     defaultSceneType?: string, // default sceneType, can be empty
-    defaultBoxes?: Array<BoundingBox|PolygonBox>, // default bounding boxes, can be empty
+    defaultBoxes?: Array<BoundingBox|labelBox|PolBox>, // default bounding boxes, can be empty
     showButton?: boolean, // showing button or not, default true
     sceneTypes?: Array<string>,
     className?: string,
     style?: any,
-    labelTypes: Array<string>,
+    typeMap: {[key:string]:string},
     returnLabel?: (label:Label)=>void,
+    setLeft?: ()=>void,
     priorNaturalX?: number,
     priorY?: number,
     isLabelLeft?:boolean
@@ -70,17 +71,29 @@ interface State {
     hoverPoint: number,
 }
 
-interface BoundingBox {
+interface BoxInteface {
+    type:string;
+    annotation: string;
+}
+
+interface BoundingBox extends BoxInteface{
     x: number,
     y: number,
     w: number,
     h: number,
-    annotation: string,
 }
 
-interface PolygonBox{
+interface labelBox extends BoxInteface{
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    label: string,
+    dist: number,
+}
+
+interface PolygonBox extends BoxInteface{
     points:Array<D2>,
-    annotation: string,
 }
 
 const MARGIN = 16;
@@ -161,7 +174,8 @@ class RecBox extends Box{
 
     getData() {
         const {x, y, w, h, annotation} = this;
-        return { x, y, w, h, annotation } as BoundingBox;
+        const type = this.type;
+        return { type, x, y, w, h, annotation } as BoundingBox;
     }
 
     static fromBoundingBox(data: BoundingBox){
@@ -211,6 +225,111 @@ class RecBox extends Box{
     // TODO add special visual effect for lock element
 }
 
+
+class LabelBox extends Box{
+    public x: number;
+    public y: number;
+    public w: number;
+    public h: number;
+    public label: string;
+    public dist : number;
+
+    constructor(x: number, y: number, w: number, h: number, label: string, dist:number) {
+        super("label");
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+        this.label = label;
+        this.dist = dist;
+    }
+
+    insideBox(x: number, y: number) {
+        if (x >= this.x - MARGIN && y >= this.y - MARGIN && x <= this.x + this.w + MARGIN && y <= this.y + this.h + MARGIN) {
+            return true;
+        }
+
+        return false;
+    }
+
+    insideInnerBox(x: number, y: number) {
+        if (x >= this.x + MARGIN && y >= this.y + MARGIN && x <= this.x + this.w - MARGIN && y <= this.y + this.h - MARGIN) {
+            return true;
+        }
+
+        return false;
+    }
+
+    getEdgeCursorIsOn(x: number, y: number) {
+        let min = MARGIN, direction = undefined;
+        const directions = {
+            'left': Math.abs(x - this.x),
+            'right': Math.abs(x - this.x - this.w),
+            'top': Math.abs(y - this.y),
+            'bottom': Math.abs(y - this.y - this.h),
+        }
+
+        for (let d in directions) {
+            if (directions[d] < min) {
+                direction = d;
+                min = directions[d];
+            }
+        }
+
+        return direction;
+    }
+
+    getData() {
+        const {x, y, w, h, annotation, type, label, dist} = this;
+        return { type, x, y, w, h, annotation, label, dist} as labelBox;
+    }
+
+    static fromlabelBox(data: labelBox){
+        const box = new LabelBox(data.x, data.y, data.w, data.h, data.label, data.dist);
+        box.annotation = data.annotation;
+        return box;
+    }
+
+
+    moveBoxByDrag (xMovement: number, yMovement: number) {
+        this.x += xMovement;
+        this.y += yMovement;
+    }
+
+    resizeByDrag (edge: string|undefined, xMovement: number, yMovement: number) {
+        if (edge === undefined) {
+            return;
+        }
+
+        switch (edge) {
+            case 'left':
+                xMovement = Math.min(xMovement, this.w - BOX_MIN_LENGTH);
+                this.x += xMovement;
+                this.w -= xMovement;
+                break;
+            
+            case 'right':
+                xMovement = Math.max(xMovement, - this.w + BOX_MIN_LENGTH);
+                this.w += xMovement;
+                break;
+
+            case 'top':
+                yMovement = Math.min(yMovement, this.h - BOX_MIN_LENGTH);
+                this.y += yMovement;
+                this.h -= yMovement;
+                break;
+
+            case 'bottom':
+                yMovement = Math.max(yMovement, - this.h + BOX_MIN_LENGTH);
+                this.h += yMovement;
+                break;
+        }
+    }
+
+    // TODO move draw here
+
+    // TODO add special visual effect for lock element
+}
 
 class PolBox extends Box{
     public points: Array<D2>;
@@ -334,10 +453,11 @@ class PolBox extends Box{
 
     getData() {
         const {points, annotation} = this;
-        return {points, annotation } as PolygonBox;
+        const type = this.type;
+        return {type, points, annotation } as PolygonBox;
     }
 
-    static fromBoundingBox(data: PolygonBox){
+    static fromPolygonBox(data: PolygonBox){
         const box = new PolBox(data.points);
         box.annotation = data.annotation;
         return box;
@@ -370,7 +490,7 @@ export class Annotator extends React.Component<Props, State>{
     private lastZoomScale?: null | number;
     private lastX?: null | number;
     private lastY?: null | number;
-    private position: D2;
+    private position: D2;//显示画图左上角这个点的坐标
     private scale: D2;
     private startX: undefined | number;
     private startY: undefined | number;
@@ -382,7 +502,8 @@ export class Annotator extends React.Component<Props, State>{
     private boxes: Box[];
     private bg: any;
     private events: Array<[Element|Window, string, EventListener]>;
-    private nextDefaultType?: string; // When deleting, add next defaultType
+    private CurrenttDefaultType?: string; 
+    private flawTypes: Array<string>;
 
     constructor(props: Props) {
         super(props);
@@ -407,7 +528,7 @@ export class Annotator extends React.Component<Props, State>{
             isTransform: false,
             annotateType: 1,
             modalVisible: false,
-            labelType: "A",
+            labelType: "",
             labelDist: 0,
             labelX: 0,
             labelY: 0,
@@ -421,21 +542,28 @@ export class Annotator extends React.Component<Props, State>{
         this.bg = new Image();
         this.bg.src = bg;
         this.events = [];
-        this.nextDefaultType = undefined;
+        this.CurrenttDefaultType = undefined;
+        this.flawTypes = [];
+        var item;
+        for (item in this.props.typeMap){
+            this.flawTypes.push(item+"-"+this.props.typeMap[item])
+        }
     }
 
     componentWillReceiveProps(nextProps: Readonly<Props>, nextContext: any): void {
         // Merge this with componentDidMount
         if (nextProps.imageUrl !== this.props.imageUrl) {
             // New Image
-            this.nextDefaultType = undefined;
+            this.CurrenttDefaultType = undefined;
             this.initCanvas(nextProps.imageUrl);
             if (nextProps.defaultBoxes){
-                this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox|PolygonBox) => {
-                    if(bbox.hasOwnProperty("x"))
+                this.boxes = nextProps.defaultBoxes.map((bbox: BoxInteface) => {
+                    if(bbox.type == "rectangle")
                         return RecBox.fromBoundingBox(bbox as BoundingBox);
+                    else if(bbox.type == "label")
+                        return LabelBox.fromlabelBox(bbox as labelBox);
                     else
-                        return PolBox.fromBoundingBox(bbox as PolygonBox);
+                        return PolBox.fromPolygonBox(bbox as PolygonBox);
                 });
                 if (this.boxes.length !== 0){
                     this.chooseBox(this.boxes[0]);
@@ -470,11 +598,13 @@ export class Annotator extends React.Component<Props, State>{
         requestAnimationFrame(this.draw);
         this.initCanvas(this.props.imageUrl);
         if (this.props.defaultBoxes){
-            this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox|PolygonBox) => {
-                if(bbox.hasOwnProperty("x"))
+            this.boxes = this.props.defaultBoxes.map((bbox: BoxInteface) => {
+                if(bbox.type == "rectangle")
                     return RecBox.fromBoundingBox(bbox as BoundingBox);
+                else if(bbox.type == "label")
+                    return LabelBox.fromlabelBox(bbox as labelBox);
                 else
-                    return PolBox.fromBoundingBox(bbox as PolygonBox);
+                    return PolBox.fromPolygonBox(bbox as PolygonBox);
             });
 
             if (this.boxes.length !== 0){
@@ -510,7 +640,7 @@ export class Annotator extends React.Component<Props, State>{
             this.setState({ sceneType: '' });
         }
 
-        this.nextDefaultType = undefined;
+        this.CurrenttDefaultType = undefined;
     }
 
     componentWillUnmount() {
@@ -581,8 +711,18 @@ export class Annotator extends React.Component<Props, State>{
                         this.dragX = x; this.dragY = y;
                         return;
                     }
-                }
-                if(this.chosenBox.type=="polygon"){
+                }else if(this.chosenBox.type=="label"){
+                    if((this.chosenBox as LabelBox).insideInnerBox(x, y)){
+                        (this.chosenBox as LabelBox).moveBoxByDrag(x - this.dragX, y - this.dragY);
+                        this.dragX = x; this.dragY = y;
+                        return;
+                    }
+                    if (this.chosenBox && this.dragX && this.dragY) {
+                        (this.chosenBox as LabelBox).resizeByDrag((this.chosenBox as LabelBox).getEdgeCursorIsOn(x, y), x - this.dragX, y - this.dragY);
+                        this.dragX = x; this.dragY = y;
+                        return;
+                    }
+                }else if(this.chosenBox.type=="polygon"){
                     // move the point
                     var point_index = (this.chosenBox as PolBox).getPointCursorIsOn(x,y)
                     if(point_index == -1)
@@ -664,12 +804,12 @@ export class Annotator extends React.Component<Props, State>{
                     this.annotatingBox = new PolBox([]);
                     (this.annotatingBox as PolBox).insertPoint({x:this.dragX,y:this.dragY})
                     this.setState({polygonStart:true});
-                    if (this.nextDefaultType) {
-                        this.annotatingBox.annotation = this.nextDefaultType;
+                    if (this.CurrenttDefaultType) {
+                        this.annotatingBox.annotation = this.CurrenttDefaultType;
                     } else if (this.props.defaultType) {
                         this.annotatingBox.annotation = this.props.defaultType;
                     } else {
-                        this.annotatingBox.annotation = this.props.types[0];
+                        this.annotatingBox.annotation = this.flawTypes[0];
                     }
                 }
                 else if(this.annotatingBox&&this.state.polygonStart&&this.annotatingBox.type=="polygon")
@@ -706,14 +846,18 @@ export class Annotator extends React.Component<Props, State>{
             if (this.annotatingBox !== undefined){
                 if(this.annotatingBox.type == "rectangle"){
                     // User create new box
+                    this.chooseBox(this.annotatingBox);
+                    this.boxes.push(this.annotatingBox);
+                    this.annotatingBox = undefined;
+                }else if(this.annotatingBox.type == "label"){
+                    // User create new box
                     if(this.state.annotateType==2){
-                        this.setState({modalVisible:true,labelX:(this.annotatingBox as RecBox).x,labelY:(this.annotatingBox as RecBox).y});
+                        this.setState({modalVisible:true,labelX:(this.annotatingBox as LabelBox).x,labelY:(this.annotatingBox as LabelBox).y});
                     }
                     this.chooseBox(this.annotatingBox);
                     this.boxes.push(this.annotatingBox);
                     this.annotatingBox = undefined;
-                }
-                else if (this.chosenBox && !this.state.isAnnotating){
+                }else if (this.chosenBox && !this.state.isAnnotating){
                     this.refreshBoxTipPosition();
                 }
             }
@@ -737,9 +881,11 @@ export class Annotator extends React.Component<Props, State>{
         let relativeY = e.clientY - this.canvas.getBoundingClientRect().top;
         let { x, y } = this.invertTransform(relativeX, relativeY);
         if (e.deltaY > 0) {
-            this.doZoom(-2, x, y);
+            //this.doZoom(-2, x, y);
+            this.doZoom(-2);
         } else if (e.deltaY < 0) {
-            this.doZoom(2, x, y);
+            //this.doZoom(2, x, y);
+            this.doZoom(2);
         }
 
         e.stopPropagation();
@@ -762,9 +908,20 @@ export class Annotator extends React.Component<Props, State>{
             this.dragX = x; this.dragY = y;
             return;
         }
+        if (this.state.isMovingBox && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY&&this.chosenBox.type=="label") {
+            (this.chosenBox as LabelBox).moveBoxByDrag(x - this.dragX, y - this.dragY);
+            this.dragX = x; this.dragY = y;
+            return;
+        }
 
         if (this.state.hoverEdge && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY&&this.chosenBox.type=="rectangle") {
             (this.chosenBox as RecBox).resizeByDrag(this.state.hoverEdge, x - this.dragX, y - this.dragY);
+            this.dragX = x; this.dragY = y;
+            return;
+        }
+
+        if (this.state.hoverEdge && this.state.mouse_down && this.chosenBox && this.dragX && this.dragY&&this.chosenBox.type=="label") {
+            (this.chosenBox as LabelBox).resizeByDrag(this.state.hoverEdge, x - this.dragX, y - this.dragY);
             this.dragX = x; this.dragY = y;
             return;
         }
@@ -840,7 +997,28 @@ export class Annotator extends React.Component<Props, State>{
                     showAnnotation: true
                 });
             }
-        } 
+        }else if(box.type == "label"){
+            const { x, y, h } = this.getCurrentCoordinate((box as LabelBox).x,(box as LabelBox).y,(box as LabelBox).w,(box as LabelBox).h);
+            const { height } = this.props;
+            this.chosenBox = box;
+            let newY = y + h;
+            if (newY + 100 > height) {
+                // Annotation reaches the bottom
+                newY = y - 110;
+            }
+    
+            this.setState({
+                annotation: box.annotation,
+                x: x,
+                y: newY,
+                lock: box.lock
+            });
+            if (showAnnotation && !this.state.showAnnotation) {
+                this.setState({
+                    showAnnotation: true
+                });
+            }
+        }
         else{
             const {left,right,top,buttom} = (box as PolBox).getBounding();
             const { x, y, h } = this.getCurrentCoordinate(left,top,right-left,buttom-top);
@@ -924,6 +1102,10 @@ export class Annotator extends React.Component<Props, State>{
             if(this.chosenBox.type=="rectangle")
             {
                 edge = (this.chosenBox as RecBox).getEdgeCursorIsOn(x, y);
+                isMovingBox = this.chosenBox.insideInnerBox(x, y);
+            }else if(this.chosenBox.type=="label")
+            {
+                edge = (this.chosenBox as LabelBox).getEdgeCursorIsOn(x, y);
                 isMovingBox = this.chosenBox.insideInnerBox(x, y);
             }
             else{
@@ -1069,12 +1251,12 @@ export class Annotator extends React.Component<Props, State>{
             Math.abs(y - this.startY)
         );
 
-        if (this.nextDefaultType) {
-            this.annotatingBox.annotation = this.nextDefaultType;
+        if (this.CurrenttDefaultType) {
+            this.annotatingBox.annotation = this.CurrenttDefaultType;
         } else if (this.props.defaultType) {
             this.annotatingBox.annotation = this.props.defaultType;
         } else {
-            this.annotatingBox.annotation = this.props.types[0];
+            this.annotatingBox.annotation = this.flawTypes[0];
         }
     };
     labelMove = (relativeX: number, relativeY: number) => {
@@ -1083,11 +1265,13 @@ export class Annotator extends React.Component<Props, State>{
         }
 
         let { x, y } = this.invertTransform(relativeX, relativeY);
-        this.annotatingBox = new RecBox(
+        this.annotatingBox = new LabelBox(
             Math.min(this.startX, x),
             Math.min(this.startY, y),
             Math.abs(x - this.startX),
-            Math.abs(y - this.startY)
+            Math.abs(y - this.startY),
+            "",
+            0
         );
         this.annotatingBox.annotation = "label";
     };
@@ -1148,16 +1332,17 @@ export class Annotator extends React.Component<Props, State>{
             this.image.height
         ); 
         if(this.props.priorNaturalX&&this.props.priorY&&this.props.priorNaturalX!=0&&this.props.priorY!=0&&this.ctx){
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.strokeStyle = 'rgba(250, 250, 2500, 0.6)';
             this.ctx.lineWidth = 5 / this.scale.x;
             let ctx_X = this.props.priorNaturalX / imageNaturalSize * this.image.naturalWidth;
             let ctx_Y = this.props.priorY;
-            this.ctx.strokeRect(ctx_X,ctx_Y,100,100)
+            this.ctx.strokeRect(ctx_X,ctx_Y,300,300)
         }
         if (this.annotatingBox !== undefined) {
             if(this.annotatingBox.type=="rectangle")
             {
                 this.ctx.save();
+                this.ctx.lineWidth = 2 / this.scale.x;
                 this.ctx.fillStyle = "#f00";
                 this.ctx.strokeStyle = '#333';
                 this.ctx.strokeRect((this.annotatingBox as RecBox).x, (this.annotatingBox as RecBox).y, (this.annotatingBox as RecBox).w, (this.annotatingBox as RecBox).h);
@@ -1165,10 +1350,21 @@ export class Annotator extends React.Component<Props, State>{
                 this.ctx.fillRect((this.annotatingBox as RecBox).x, (this.annotatingBox as RecBox).y, (this.annotatingBox as RecBox).w, (this.annotatingBox as RecBox).h);
                 this.ctx.restore();
                 this.ctx.globalAlpha = 0.3;
+            }else if(this.annotatingBox.type=="label")
+            {
+                this.ctx.save();
+                this.ctx.lineWidth = 2 / this.scale.x;
+                this.ctx.fillStyle = "#f00";
+                this.ctx.strokeStyle = '#333';
+                this.ctx.strokeRect((this.annotatingBox as LabelBox).x, (this.annotatingBox as LabelBox).y, (this.annotatingBox as LabelBox).w, (this.annotatingBox as LabelBox).h);
+                this.ctx.fillStyle = 'rgba(250, 50, 50, 0.3)';
+                this.ctx.fillRect((this.annotatingBox as LabelBox).x, (this.annotatingBox as LabelBox).y, (this.annotatingBox as LabelBox).w, (this.annotatingBox as LabelBox).h);
+                this.ctx.restore();
+                this.ctx.globalAlpha = 0.3;
             }
             else if(this.annotatingBox.type == "polygon"){
                 this.ctx.strokeStyle = '#333';
-                this.ctx.lineWidth = 2
+                this.ctx.lineWidth = 2 / this.scale.x;
                // this.ctx.beginPath();
                 let length = (this.annotatingBox as PolBox).getLength()
                 for(let i = 0;i<length;i++){
@@ -1200,10 +1396,14 @@ export class Annotator extends React.Component<Props, State>{
                         this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
                         this.ctx.lineWidth = 2 / this.scale.x;
                         this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
+                    }else if(box.type=="label"){
+                        this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                        this.ctx.lineWidth = 2 / this.scale.x;
+                        this.ctx.strokeRect((box as LabelBox).x, (box as LabelBox).y, (box as LabelBox).w, (box as LabelBox).h);
                     }
                     else{
                         this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-                        this.ctx.lineWidth = 2
+                        this.ctx.lineWidth = 2 / this.scale.x;
                         let length = (box as PolBox).getLength()
                         for(let i = 0;i<length;i++){
                             this.ctx.beginPath();
@@ -1231,7 +1431,7 @@ export class Annotator extends React.Component<Props, State>{
                     }
                 } else {
                     if(box.type=="rectangle"){
-                        this.ctx.lineWidth = 5;
+                        this.ctx.lineWidth = 5 / this.scale.x;
                         this.ctx.strokeStyle = '#555';
                         this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
         
@@ -1242,8 +1442,21 @@ export class Annotator extends React.Component<Props, State>{
                         this.ctx.textAlign = 'center';
                         this.ctx.font = fontSize + 'px Ubuntu';
                         this.ctx.fillText(box.annotation, (box as RecBox).x + (box as RecBox).w / 2, (box as RecBox).y + (box as RecBox).h / 2 + fontSize / 2);
+                    }else if(box.type=="label"){
+                        this.ctx.lineWidth = 5 / this.scale.x;
+                        this.ctx.strokeStyle = '#555';
+                        this.ctx.strokeRect((box as LabelBox).x, (box as LabelBox).y, (box as LabelBox).w, (box as LabelBox).h);
+        
+                        this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
+                        this.ctx.fillRect((box as LabelBox).x, (box as LabelBox).y, ((box as LabelBox) as LabelBox).w, (box as LabelBox).h);
+                        // text
+                        this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.font = fontSize + 'px Ubuntu';
+                        this.ctx.fillText(box.annotation, (box as LabelBox).x + (box as LabelBox).w / 2, (box as LabelBox).y + (box as LabelBox).h / 2 + fontSize / 2);
                     }
                     else{
+                        this.ctx.lineWidth = 5 / this.scale.x;
                         this.ctx.strokeStyle = '#555';
                         let length = (box as PolBox).getLength()
                         for(let i = 0;i<length;i++){
@@ -1274,7 +1487,7 @@ export class Annotator extends React.Component<Props, State>{
                 }
             } else if (box.hover) {
                 if(box.type=="rectangle"){
-                    this.ctx.lineWidth = 5;
+                    this.ctx.lineWidth = 5 / this.scale.x;
                     this.ctx.strokeStyle = '#555';
                     this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
 
@@ -1285,9 +1498,21 @@ export class Annotator extends React.Component<Props, State>{
                     this.ctx.textAlign = 'center';
                     this.ctx.font = fontSize + 'px Ubuntu';
                     this.ctx.fillText(box.annotation, (box as RecBox).x + (box as RecBox).w / 2, (box as RecBox).y + (box as RecBox).h / 2 + fontSize / 2);
+                }else if(box.type=="label"){
+                    this.ctx.lineWidth = 5 / this.scale.x;
+                    this.ctx.strokeStyle = '#555';
+                    this.ctx.strokeRect((box as LabelBox).x, (box as LabelBox).y, (box as LabelBox).w, (box as LabelBox).h);
+
+                    this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
+                    this.ctx.fillRect((box as LabelBox).x, (box as LabelBox).y, (box as LabelBox).w, (box as LabelBox).h);
+                    // text
+                    this.ctx.fillStyle = 'rgba(40, 40, 40, 0.8)';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.font = fontSize + 'px Ubuntu';
+                    this.ctx.fillText(box.annotation, (box as LabelBox).x + (box as LabelBox).w / 2, (box as LabelBox).y + (box as LabelBox).h / 2 + fontSize / 2);
                 }
                 else{
-                    this.ctx.lineWidth = 5;
+                    this.ctx.lineWidth = 5 / this.scale.x;
                     this.ctx.strokeStyle = '#555';
                     let length = (box as PolBox).getLength()
                     this.ctx.beginPath();
@@ -1311,7 +1536,7 @@ export class Annotator extends React.Component<Props, State>{
                 }
             } else {
                 if(box.type=="rectangle"){
-                    this.ctx.lineWidth = 5;
+                    this.ctx.lineWidth = 5 / this.scale.x;
                     this.ctx.strokeStyle = '#555';
                     this.ctx.strokeRect((box as RecBox).x, (box as RecBox).y, (box as RecBox).w, (box as RecBox).h);
 
@@ -1323,9 +1548,22 @@ export class Annotator extends React.Component<Props, State>{
                     this.ctx.textAlign = 'center';
                     this.ctx.font = fontSize + 'px Ubuntu';
                     this.ctx.fillText(box.annotation, (box as RecBox).x + (box as RecBox).w / 2, (box as RecBox).y + (box as RecBox).h / 2 + fontSize / 2);
+                }else if(box.type=="label"){
+                    this.ctx.lineWidth = 5 / this.scale.x;
+                    this.ctx.strokeStyle = '#555';
+                    this.ctx.strokeRect((box as LabelBox).x, (box as LabelBox).y, (box as LabelBox).w, (box as LabelBox).h);
+
+                    this.ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
+                    this.ctx.lineWidth = 3 / this.scale.x;
+                    this.ctx.strokeRect((box as LabelBox).x + margin, (box as LabelBox).y + margin, (box as LabelBox).w - margin * 2, (box as LabelBox).h - margin * 2)
+                    // text
+                    this.ctx.fillStyle = 'rgba(40, 40, 40, 0.3)';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.font = fontSize + 'px Ubuntu';
+                    this.ctx.fillText(box.annotation, (box as LabelBox).x + (box as LabelBox).w / 2, (box as LabelBox).y + (box as LabelBox).h / 2 + fontSize / 2);
                 }
                 else{
-                    this.ctx.lineWidth = 5;
+                    this.ctx.lineWidth = 3 / this.scale.x;
                     this.ctx.strokeStyle = '#555';
                     let length = (box as PolBox).getLength()
                     this.ctx.beginPath();
@@ -1383,7 +1621,6 @@ export class Annotator extends React.Component<Props, State>{
         if (this.props.sceneTypes) {
             data['sceneType'] = this.state.sceneType;
         }
-
         return data;
     };
 
@@ -1425,7 +1662,7 @@ export class Annotator extends React.Component<Props, State>{
         }
 
         this.cancelChosenBox();
-        this.nextDefaultType = chosen.annotation;
+        //this.nextDefaultType = chosen.annotation;
         const index = this.boxes.indexOf(chosen);
         this.boxes.splice(index, 1);
     }
@@ -1439,12 +1676,20 @@ export class Annotator extends React.Component<Props, State>{
         else{
             label.naturalX = label.distance + imageNaturalSize - label.naturalX/this.image.naturalWidth*imageNaturalSize
         }
+        this.setState({modalVisible:false})
         if(this.props.returnLabel != undefined)
             this.props.returnLabel(label)
-        this.setState({modalVisible:false})
+        if(this.boxes.length>0&&this.boxes[this.boxes.length-1].type == "label"){
+            (this.boxes[this.boxes.length-1] as LabelBox).label = this.state.labelType;
+            (this.boxes[this.boxes.length-1] as LabelBox).dist = this.state.labelDist;
+        }
+        this.CurrenttDefaultType = this.state.labelType;
+        if(this.props.setLeft)
+            this.props.setLeft();
     }
     modalHandleCancel = ()=> {
         this.setState({modalVisible:false})
+        this.annotatingBox = undefined;
     }
 
     render() {
@@ -1590,12 +1835,13 @@ export class Annotator extends React.Component<Props, State>{
                         onCancel={this.modalHandleCancel}>
                         <div>
                         <Select 
-                        defaultValue = "A"
+                        style={{ width: 120 }}
+                        defaultValue = {this.flawTypes[0]}
                         onChange={(value:string)=>{
                             this.setState({labelType:value})
                         }}>
-                        {this.props.labelTypes.map((type:string)=>
-                            <Option value={type}>{type}</Option>
+                        {this.flawTypes.map((item:string)=>
+                            <Option value={item}>{item}</Option>
                         )}
                         </Select>
                         </div>
@@ -1631,9 +1877,10 @@ export class Annotator extends React.Component<Props, State>{
                             disabled={isLocked}
                             value={this.state.annotation}
                         >
-                            {this.props.types.map((type: string) =>
-                                <Option value={type} key={type}>{type}</Option>
-                            )}
+                            {this.chosenBox!==undefined?(this.chosenBox.type!=="label"?this.flawTypes.map((item: string) =>
+                                <Option value={item} key={item}>{item}</Option>
+                            ):<Option value={"label"}>label</Option>):undefined}
+
                         </Select>
 
                         <Button

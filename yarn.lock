@@ -7904,6 +7904,14 @@ wbuf@^1.1.0, wbuf@^1.7.3:
   dependencies:
     minimalistic-assert "^1.0.0"
 
+web-labeler-react@^1.0.22:
+  version "1.0.22"
+  resolved "https://registry.yarnpkg.com/web-labeler-react/-/web-labeler-react-1.0.22.tgz#5b2b3d6a2be2c7dee099a43c0fadb8dad3abc296"
+  integrity sha512-q/yRtgSlQ5jtx2qjAhzuP6+ekvfgpbD9rQs0rnK04suOX9DdykFzW3HbBzZxA4lRwzFUEqlsfJYdo1KR03eMqQ==
+  dependencies:
+    babel-plugin-import "^1.12.0"
+    babel-preset-env "^1.7.0"
+
 webpack-cli@^3.3.4:
   version "3.3.4"
   resolved "https://registry.yarnpkg.com/webpack-cli/-/webpack-cli-3.3.4.tgz#de27e281c48a897b8c219cb093e261d5f6afe44a"

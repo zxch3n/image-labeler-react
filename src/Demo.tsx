@@ -35,8 +35,8 @@ const Component: React.FC = (props) => {
           // upload labeled data
           console.log(labeledData);
         }}
-        types={['A', 'B', 'Cylinder']}
-        defaultType={"Cylinder"}
+        typeMap={{'A':"色污", 'B':"结头", 'C':"断尾"}}
+        defaultType={"B-结头"}
         sceneTypes={['1', '2', '3']}
         defaultSceneType={defaultSceneType}
         style={{
@@ -48,16 +48,9 @@ const Component: React.FC = (props) => {
           borderRadius: 8,
           padding: 10
         }}
-        defaultBoxes={[{
-          x: 316,
-          y: 305,
-          w: 65,
-          h: 61,
-          annotation: 'A'
-        }]}
+        defaultBoxes={[]}
         disableAnnotation={false}
         returnLabel={(label)=>{message.success(label.y)}}
-        labelTypes={["A","B"]}
         priorNaturalX={21.333333333333}
         priorY={400}
       />
