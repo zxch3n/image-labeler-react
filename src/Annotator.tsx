@@ -35,7 +35,8 @@ interface Props {
     style?: any,
     typeMap: {[key:string]:string},
     returnLabel?: (label:Label)=>void,
-    setLeft?: ()=>void,
+    setHasLabel?:(has:boolean)=>void,
+    sideLeft?: boolean,
     priorNaturalX?: number,
     priorY?: number,
     isLabelLeft?:boolean
@@ -852,7 +853,15 @@ export class Annotator extends React.Component<Props, State>{
                 }else if(this.annotatingBox.type == "label"){
                     // User create new box
                     if(this.state.annotateType==2){
-                        this.setState({modalVisible:true,labelX:(this.annotatingBox as LabelBox).x,labelY:(this.annotatingBox as LabelBox).y});
+                        if(this.props.sideLeft!==undefined){
+                            if(this.props.sideLeft){
+                                this.setState({modalVisible:true,labelX:(this.annotatingBox as LabelBox).x,labelY:(this.annotatingBox as LabelBox).y});
+                            }else{
+                                this.setState({modalVisible:true,labelX:(this.annotatingBox as LabelBox).x +
+                                    (this.annotatingBox as LabelBox).w,labelY:(this.annotatingBox as LabelBox).y +(this.annotatingBox as LabelBox).h});
+                            }
+                        }
+                        
                     }
                     this.chooseBox(this.annotatingBox);
                     this.boxes.push(this.annotatingBox);
@@ -1684,8 +1693,8 @@ export class Annotator extends React.Component<Props, State>{
             (this.boxes[this.boxes.length-1] as LabelBox).dist = this.state.labelDist;
         }
         this.CurrenttDefaultType = this.state.labelType;
-        if(this.props.setLeft)
-            this.props.setLeft();
+        if(this.props.setHasLabel)
+            this.props.setHasLabel(true);
     }
     modalHandleCancel = ()=> {
         this.setState({modalVisible:false})
