@@ -1169,7 +1169,7 @@ export class Annotator extends React.Component<Props, State>{
                        
                     </Form>
                 </div>
-                { JSON.stringify(this.state) }
+          
             </div>
         );
     }
