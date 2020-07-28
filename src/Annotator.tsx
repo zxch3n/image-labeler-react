@@ -124,8 +124,6 @@ class Box {
         return { x, y, w, h, annotation } as BoundingBox;
     }
 
-  
-
     static fromBoundingBox(data: BoundingBox){
         const box = new Box(data.x, data.y, data.w, data.h);
         box.annotation = data.annotation;
@@ -229,7 +227,7 @@ export class Annotator extends React.Component<Props, State>{
         
     }
 
-    static getDerivedStateFromProps(nextProps, prevState) {
+    static getDerivedStateFromProps(nextProps:any, prevState:any) {
    
         let obj:any = {};
         if (nextProps.imageUrl !== prevState.imageUrl) {
@@ -241,16 +239,18 @@ export class Annotator extends React.Component<Props, State>{
         return {...prevState,...obj};
     }
 
-    componentDidUpdate(prevProps, prevState) {
+    componentDidUpdate(prevProps:any) {
         
         if(prevProps.imageUrl != this.props.imageUrl) {  
             this.initCanvas(this.props.imageUrl);
         }
        
         if(prevProps.defaultBoxes != this.props.defaultBoxes) {
-            this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => {
-                return Box.fromBoundingBox(bbox);
-            });
+            if(this.props && this.props.defaultBoxes) {
+                this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => 
+                    Box.fromBoundingBox(bbox)
+                );
+            }
             
             if (this.boxes.length !== 0){
                 this.chooseBox(this.boxes[0]);
