@@ -574,7 +574,7 @@ export class Annotator extends React.Component<Props, State>{
                 box.chosen = false;
             }
 
-            this.setState({showAnnotation:true,hoverEdge: undefined, isMovingBox: false});
+            this.setState({hoverEdge: undefined, isMovingBox: false});
             box.chosen = true;
         }
 
