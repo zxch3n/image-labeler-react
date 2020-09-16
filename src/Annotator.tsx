@@ -7,7 +7,6 @@ import bg from './res/bg.png';
 
 const { Option } = Select;
 
-
 interface Props {
     imageUrl: string,
     height: number, // height of the labeling window
@@ -18,6 +17,7 @@ interface Props {
     defaultType?: string, // default type, can be empty
     defaultSceneType?: string, // default sceneType, can be empty
     defaultBoxes?: Array<BoundingBox>, // default bounding boxes, can be empty
+    onUpdate: (boxes: BoundingBox[]) => any,
     showButton?: boolean, // showing button or not, default true
     sceneTypes?: Array<string>,
     className?: string,
@@ -42,10 +42,11 @@ interface State {
     y: number,
     sceneType: string,
     hoverEdge?: string,
-    isMovingBox: boolean
+    isMovingBox: boolean,
+    imageUrl: string
 }
 
-interface BoundingBox {
+export interface BoundingBox {
     x: number,
     y: number,
     w: number,
@@ -53,6 +54,12 @@ interface BoundingBox {
     annotation: string,
 }
 
+export interface IPostData {
+    image: string;
+    height: number;
+    width: number;
+    boxes: BoundingBox[];
+}
 
 const MARGIN = 16;
 const BOX_MIN_LENGTH = 16;
@@ -207,6 +214,7 @@ export class Annotator extends React.Component<Props, State>{
             y: 0,
             hoverEdge: undefined,
             isMovingBox: false,
+            imageUrl:''
         };
         this.chosenBox = undefined;
         this.annotatingBox = undefined;
@@ -216,35 +224,40 @@ export class Annotator extends React.Component<Props, State>{
         this.bg.src = bg;
         this.events = [];
         this.nextDefaultType = undefined;
+        
     }
 
-    componentWillReceiveProps(nextProps: Readonly<Props>, nextContext: any): void {
-        // Merge this with componentDidMount
-        if (nextProps.imageUrl !== this.props.imageUrl) {
-            // New Image
-            this.nextDefaultType = undefined;
-            this.initCanvas(nextProps.imageUrl);
-            if (nextProps.defaultBoxes){
-                this.boxes = nextProps.defaultBoxes.map((bbox: BoundingBox) => {
-                    return Box.fromBoundingBox(bbox);
-                });
-
-                if (this.boxes.length !== 0){
-                    this.chooseBox(this.boxes[0]);
-                }
-            }
+    static getDerivedStateFromProps(nextProps:any, prevState:any) {
+   
+        let obj:any = {};
+        if (nextProps.imageUrl !== prevState.imageUrl) {
+           obj.nextDefaultType =  nextProps.defaultBoxes ? nextProps.defaultBoxes : undefined;
+           obj.imageUrl = nextProps.imageUrl;
         }
-
-        if (nextProps.sceneTypes){
-            if (nextProps.defaultSceneType) {
-                this.setState({sceneType: nextProps.defaultSceneType});
-            } else {
-                this.setState({sceneType: nextProps.sceneTypes[0]});
-            }
-        } else {
-            this.setState({sceneType: ''});
-        }
+        obj.sceneType =nextProps.sceneTypes ? (nextProps.defaultSceneType ? nextProps.defaultSceneType : nextProps.sceneTypes[0]) : '';
+        
+        return {...prevState,...obj};
     }
+
+    componentDidUpdate(prevProps:any) {
+        
+        if(prevProps.imageUrl != this.props.imageUrl) {  
+            this.initCanvas(this.props.imageUrl);
+        }
+       
+        if(prevProps.defaultBoxes != this.props.defaultBoxes) {
+            if(this.props && this.props.defaultBoxes) {
+                this.boxes = this.props.defaultBoxes.map((bbox: BoundingBox) => 
+                    Box.fromBoundingBox(bbox)
+                );
+            }
+            
+            if (this.boxes.length !== 0){
+                this.chooseBox(this.boxes[0]);
+            }
+        }
+           
+      }
 
     componentDidMount(): void {
         this.canvas = this.imageCanvas.current;
@@ -308,7 +321,7 @@ export class Annotator extends React.Component<Props, State>{
         this.removeEvents();
     }
 
-    registerEvent = (element: Element|Window, event: string, listener: EventListener) => {
+    registerEvent = (element: Element|Window, event: string, listener: EventListener ) => {
         element.addEventListener(event, listener);
         this.events.push([element, event, listener]);
     }
@@ -319,6 +332,12 @@ export class Annotator extends React.Component<Props, State>{
         }
 
         this.events = [];
+    }
+
+    boxesUpdate() {
+        if( this.props.onUpdate ) {
+            this.props.onUpdate(this.boxes);
+        }
     }
 
     switchMode = () => {
@@ -332,7 +351,7 @@ export class Annotator extends React.Component<Props, State>{
             throw new Error("Canvas does not exist!");
         }
 
-        this.registerEvent(this.canvas, 'touchstart', (e: TouchEvent) => {
+        this.registerEvent(this.canvas, 'touchstart', (e: TouchEvent | any) => {
             if (e.targetTouches.length == 1) {
                 [this.startX, this.startY] = this.getOriginalXY(
                     e.targetTouches[0].clientX,
@@ -347,7 +366,7 @@ export class Annotator extends React.Component<Props, State>{
             this.lastZoomScale = null;
         });
 
-        this.registerEvent(this.canvas, 'touchmove', (e: TouchEvent) => {
+        this.registerEvent(this.canvas, 'touchmove', (e: TouchEvent | any) => {
             if (this.canvas == null) {
                 return;
             }
@@ -379,7 +398,7 @@ export class Annotator extends React.Component<Props, State>{
             }
         });
 
-        this.registerEvent(this.canvas, 'touchend', (e: TouchEvent) => {
+        this.registerEvent(this.canvas, 'touchend', (e: TouchEvent | any) => {
             let isSmallDistance = false;
             if (e.targetTouches.length === 1) {
                 const x = e.targetTouches[0].clientX,
@@ -392,8 +411,11 @@ export class Annotator extends React.Component<Props, State>{
             }
 
             if (this.annotatingBox !== undefined && !isSmallDistance) {
-                this.chooseBox(this.annotatingBox);
+                
                 this.boxes.push(this.annotatingBox);
+                this.chooseBox(this.annotatingBox);
+                this.boxesUpdate();
+
                 this.annotatingBox = undefined;
             } else if (!this.state.isAnnotating && this.chosenBox) {
                 this.refreshBoxTipPosition()
@@ -409,7 +431,7 @@ export class Annotator extends React.Component<Props, State>{
         // on desktop devices
 
         // keyboard+mouse
-        this.registerEvent(window, 'keyup', (e: KeyboardEvent) => {
+        this.registerEvent(window, 'keyup', (e: KeyboardEvent | any) => {
             if (e.key === '+' || e.key === '=' || e.keyCode == 38 || e.keyCode == 39) { //+
                 e.preventDefault();
                 this.doZoom(5);
@@ -428,7 +450,7 @@ export class Annotator extends React.Component<Props, State>{
             }
         });
 
-        this.registerEvent(this.canvas, 'mousedown', (e: MouseEvent) => {
+        this.registerEvent(this.canvas, 'mousedown', (e: MouseEvent | any) => {
             [this.startX, this.startY] = this.getOriginalXY(e.clientX, e.clientY);
             this.dragX = this.startX; this.dragY = this.startY;
             this.setState({ mouse_down: true });
@@ -437,7 +459,7 @@ export class Annotator extends React.Component<Props, State>{
         });
 
         // Uesr may mouse up outside of the canvas
-        this.registerEvent(this.canvas, 'mouseup', (e: MouseEvent) => {
+        this.registerEvent(this.canvas, 'mouseup', (e: MouseEvent | any) => {
             // TODO: merge this and touch callback
             if (this.moveSmallDistance(e.clientX, e.clientY)) {
                 // User click
@@ -452,8 +474,11 @@ export class Annotator extends React.Component<Props, State>{
             // This apply to scenario when mouseup outside of the canvas
             if (this.annotatingBox !== undefined) {
                 // User create new box
-                this.chooseBox(this.annotatingBox);
+               
                 this.boxes.push(this.annotatingBox);
+                this.chooseBox(this.annotatingBox);
+                this.boxesUpdate();
+               
                 this.annotatingBox = undefined;
             } else if (this.chosenBox && !this.state.isAnnotating){
                 this.refreshBoxTipPosition();
@@ -470,7 +495,7 @@ export class Annotator extends React.Component<Props, State>{
         this.registerEvent(this.canvas, 'wheel', this.onWheel);
     };
 
-    onWheel = (e: WheelEvent) => {
+    onWheel = (e: WheelEvent | any) => {
         if (this.canvas == null) {
             return;
         }
@@ -488,7 +513,7 @@ export class Annotator extends React.Component<Props, State>{
         e.preventDefault();
     }
 
-    onMouseMove = (e: MouseEvent) => {
+    onMouseMove = (e: MouseEvent | any) => {
         if (this.canvas == null) {
             return;
         }
@@ -675,7 +700,7 @@ export class Annotator extends React.Component<Props, State>{
 
     gesturePinchZoom = (event: TouchEvent) => {
         let zoom = 0;
-
+        
         if (event.targetTouches.length >= 2) {
             let p1 = event.targetTouches[0];
             let p2 = event.targetTouches[1];
@@ -908,12 +933,8 @@ export class Annotator extends React.Component<Props, State>{
     };
 
     initCanvas = (url: string) => {
-        if (url.length === 0) {
-            url = "https://i.postimg.cc/q7RCmNNV/example.png";
-        }
-
         this.isDrawing = false;
-        this.image.src = url;
+        this.image.src = url ? url : "";
         this.isDrawing = true;
         this.position.x = 0;
         this.position.y = 0;
@@ -923,8 +944,8 @@ export class Annotator extends React.Component<Props, State>{
         this.setState({hoverEdge: undefined, isMovingBox: false});
     };
 
-    getPostData = () => {
-        let data = {
+    getPostData = ():IPostData => {
+        let data:IPostData = {
             image: this.image.src,
             height: this.image.naturalHeight,
             width: this.image.naturalWidth,
@@ -968,11 +989,15 @@ export class Annotator extends React.Component<Props, State>{
         if (chosen === undefined) {
             return;
         }
-
+        
         this.cancelChosenBox();
         this.nextDefaultType = chosen.annotation;
         const index = this.boxes.indexOf(chosen);
         this.boxes.splice(index, 1);
+        // @farandal : I think the best is to put this.boxes in the state,
+        // so we can trigger an event in the component did update, for now,
+        // this will do.
+        this.boxesUpdate();
     }
 
     render() {
@@ -1093,7 +1118,7 @@ export class Annotator extends React.Component<Props, State>{
                             borderRadius: 4,
                             zIndex: 1
                         }}
-                    >
+                    >                        
                         <Select
                             onChange={(value: string) => {
                                 if (this.chosenBox !== undefined) {
@@ -1141,8 +1166,10 @@ export class Annotator extends React.Component<Props, State>{
                             disabled={isLocked}
                             onClick={this.onDelete}
                         />
+                       
                     </Form>
                 </div>
+          
             </div>
         );
     }
