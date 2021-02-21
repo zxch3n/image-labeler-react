@@ -58,6 +58,7 @@ interface Props {
     height: number, // height of the labeling window
     width: number, // width of the labeling window
     types: Array<string>, // annotation types
+    typesColor?: Array<string>, // colors for annotation types
     asyncUpload?: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
     disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
