@@ -12,6 +12,7 @@ interface Props {
     height: number, // height of the labeling window
     width: number, // width of the labeling window
     types: Array<string>, // annotation types
+    typesColor: Array<string>, // colors for annotation types
     asyncUpload?: (data: any) => Promise<any>, // will be invoked when uploading. you can switch to next image in this callback
     disableAnnotation?: boolean, // default false
     defaultType?: string, // default type, can be empty
@@ -869,6 +870,18 @@ export class Annotator extends React.Component<Props, State>{
         }
 
         this.ctx.fillStyle = "#f00";
+
+        // find the correct stroke style for a bounding box
+        const findAnnotationIndex = (annotation: String) =>
+        this.props.types.findIndex((type) => type === annotation)
+
+        const getStrokeStyle = (annotation: String) => {
+            const { typesColor } = this.props
+            if (!typesColor) return '#555'
+            const strokeStyle = typesColor[findAnnotationIndex(annotation)]
+            return strokeStyle ? strokeStyle : '#555'
+        }
+
         for (let i = 0; i < this.boxes.length; i++) {
             let box = this.boxes[i];
             const fontSize = 30 / this.scale.x;
@@ -879,7 +892,7 @@ export class Annotator extends React.Component<Props, State>{
                     this.ctx.strokeRect(box.x, box.y, box.w, box.h);
                 } else {
                     this.ctx.lineWidth = 5;
-                    this.ctx.strokeStyle = '#555';
+                    this.ctx.strokeStyle = getStrokeStyle(box.annotation);
                     this.ctx.strokeRect(box.x, box.y, box.w, box.h);
 
                     this.ctx.fillStyle = 'rgba(255, 100, 145, 0.45)';
@@ -898,7 +911,7 @@ export class Annotator extends React.Component<Props, State>{
                 }
             } else if (box.hover) {
                 this.ctx.lineWidth = 5;
-                this.ctx.strokeStyle = '#555';
+                this.ctx.strokeStyle = getStrokeStyle(box.annotation);
                 this.ctx.strokeRect(box.x, box.y, box.w, box.h);
 
                 this.ctx.fillStyle = 'rgba(255, 100, 145, 0.3)';
@@ -910,7 +923,7 @@ export class Annotator extends React.Component<Props, State>{
                 this.ctx.fillText(box.annotation, box.x + box.w / 2, box.y + box.h / 2 + fontSize / 2);
             } else {
                 this.ctx.lineWidth = 5;
-                this.ctx.strokeStyle = '#555';
+                this.ctx.strokeStyle = getStrokeStyle(box.annotation);
                 this.ctx.strokeRect(box.x, box.y, box.w, box.h);
 
                 this.ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
